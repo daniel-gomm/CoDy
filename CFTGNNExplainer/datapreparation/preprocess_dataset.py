@@ -2,7 +2,7 @@ import argparse
 import sys
 import pandas as pd
 import numpy as np
-from CFTGNNExplainer.constants import PREFIX_EDGE_FEATURE_COL, COL_ID, COL_STATE, COL_NODE_I, COL_NODE_U, COL_TIMESTAMP
+from CFTGNNExplainer.constants import COL_ID, COL_STATE, COL_NODE_I, COL_NODE_U, COL_TIMESTAMP
 
 
 def _check_required_columns(dataset: pd.DataFrame) -> None:
@@ -19,7 +19,7 @@ def _check_required_columns(dataset: pd.DataFrame) -> None:
 
 def _reindex_vertices(dataset: pd.DataFrame, bipartite: bool) -> pd.DataFrame:
     """
-    Reindexes the dataset such that all i nodes are different from all u nodes
+    Re-indexes the dataset such that all i nodes are different from all u nodes
     :param dataset: dataset to reindex
     :param bipartite: Set to true if sets of connected nodes are bipartite, false otherwise
     :rtype: DataFrame
@@ -109,13 +109,13 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--filepath', type=str, required=True, help='Path to the dataset csv file')
     parser.add_argument('-t', '--target', type=str, required=True,
                         help='Directory to which the processed dataset is to be stored to')
-    parser.add_argument('-n', '--nodefeatures', type=str, default=None,
+    parser.add_argument('-n', '--node-features', type=str, default=None,
                         help='Path to file with node features')
     parser.add_argument('-b', '--bipartite', action='store_true', help='Whether the graph is bipartite')
 
     try:
         args = parser.parse_args()
-    except:
+    except SystemExit:
         parser.print_help()
         sys.exit(0)
 
