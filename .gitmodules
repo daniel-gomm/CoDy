@@ -1,0 +1,3 @@
+[submodule "submodules/tgn"]
+	path = submodules/tgn
+	url = https://github.com/daniel-gomm/tgn-packaged.git
