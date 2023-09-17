@@ -9,7 +9,7 @@ from TGN.model.tgn import TGN
 from TGN.utils.utils import get_neighbor_finder, RandEdgeSampler, EarlyStopMonitor
 from TGN.utils.data_processing import compute_time_statistics
 from TGN.evaluation.evaluation import eval_edge_prediction
-from CFTGNNExplainer.data.dataset import ContinuousTimeDynamicGraphDataset
+from CFTGNNExplainer.data.dataset import ContinuousTimeDynamicGraphDataset, BatchData
 from CFTGNNExplainer.utils import ProgressBar, construct_model_path
 
 
@@ -22,6 +22,40 @@ class TGNNWrapper:
         self.dataset = dataset
         self.name = model_name
         self.latest_event_id = 0
+
+    def rollout_until_event(self, event_id: int = None, batch_data: BatchData = None,
+                            progress_bar: ProgressBar = None) -> None:
+        raise NotImplementedError
+
+    def compute_edge_probabilities(self, source_nodes: np.ndarray, target_nodes: np.ndarray,
+                                   edge_timestamps: np.ndarray, edge_ids: np.ndarray,
+                                   negative_nodes: np.ndarray | None = None, result_as_logit: bool = False):
+        raise NotImplementedError
+
+    def get_memory(self):
+        raise NotImplementedError
+
+    def detach_memory(self):
+        raise NotImplementedError
+
+    def restore_memory(self, memory_backup, event_id):
+        raise NotImplementedError
+
+    def reset_model(self):
+        raise NotImplementedError
+
+    def reset_latest_event_id(self, value: int = None):
+        if value is not None:
+            self.latest_event_id = value
+        else:
+            self.latest_event_id = 0
+
+    def extract_event_information(self, event_ids: int | np.ndarray):
+        source_nodes, target_nodes, timestamps = self.dataset.source_node_ids[event_ids], \
+            self.dataset.target_node_ids[event_ids], self.dataset.timestamps[event_ids]
+        if type(event_ids) is int or type(event_ids) is np.int64:
+            return np.array([source_nodes, ]), np.array([target_nodes, ]), np.array([timestamps, ]), np.array([event_ids, ])
+        return source_nodes, target_nodes, timestamps, event_ids
 
 
 class TGNWrapper(TGNNWrapper):
@@ -42,6 +76,55 @@ class TGNWrapper(TGNNWrapper):
         self.logger = logging.getLogger()
         if checkpoint_path is not None:
             self.model.load_state_dict(torch.load(checkpoint_path))
+
+    def rollout_until_event(self, event_id: int = None, batch_data: BatchData = None,
+                            progress_bar: ProgressBar = None) -> None:
+        assert event_id is not None or batch_data is not None
+        if batch_data is None:
+            batch_data = self.dataset.get_batch_data(self.latest_event_id, event_id)
+        batch_id = 0
+        number_of_batches = int(np.ceil(len(batch_data.source_node_ids) / self.batch_size))
+        if progress_bar is not None:
+            progress_bar.reset(number_of_batches)
+        with torch.no_grad():
+            for _ in range(number_of_batches):
+                if progress_bar is not None:
+                    progress_bar.next()
+                batch_start = batch_id * self.batch_size
+                batch_end = min((batch_id + 1) * self.batch_size, len(batch_data.source_node_ids))
+                self.model.compute_temporal_embeddings(source_nodes=batch_data.source_node_ids[batch_start:batch_end],
+                                                       destination_nodes=batch_data.target_node_ids[batch_start:
+                                                                                                    batch_end],
+                                                       edge_times=batch_data.timestamps[batch_start:batch_end],
+                                                       edge_idxs=batch_data.edge_ids[batch_start:batch_end],
+                                                       negative_nodes=None)
+                self.model.memory.detach_memory()
+                batch_id += 1
+
+        self.latest_event_id = event_id
+
+    def compute_edge_probabilities(self, source_nodes: np.ndarray, target_nodes: np.ndarray,
+                                   edge_timestamps: np.ndarray, edge_ids: np.ndarray,
+                                   negative_nodes: np.ndarray | None = None, result_as_logit: bool = False,
+                                   perform_memory_update: bool = True):
+        return self.model.compute_edge_probabilities(source_nodes, target_nodes, negative_nodes, edge_timestamps,
+                                                     edge_ids, self.n_neighbors, result_as_logit, perform_memory_update)
+
+    def get_memory(self):
+        return self.model.memory.backup_memory()
+
+    def detach_memory(self):
+        self.model.memory.detach_memory()
+
+    def restore_memory(self, memory_backup, event_id):
+        self.reset_model()
+        self.model.memory.restore_memory(memory_backup)
+        self.reset_latest_event_id(event_id)
+
+    def reset_model(self):
+        self.reset_latest_event_id()
+        self.detach_memory()
+        self.model.memory.__init_memory__()
 
     def train_model(self, epochs: int = 50, learning_rate: float = 0.0001, early_stop_patience: int = 5,
                     checkpoint_path: str = './saved_checkpoints/', model_path: str = './saved_models/',
