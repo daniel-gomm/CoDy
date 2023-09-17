@@ -23,6 +23,8 @@ class TGNNWrapper:
         self.name = model_name
         self.latest_event_id = 0
         self.evaluation_mode = False
+        logging.basicConfig(level=logging.INFO)
+        self.logger = logging.getLogger()
 
     def rollout_until_event(self, event_id: int = None, batch_data: BatchData = None,
                             progress_bar: ProgressBar = None) -> None:
@@ -86,8 +88,6 @@ class TGNWrapper(TGNNWrapper):
         self.n_neighbors = n_neighbors
         self.batch_size = batch_size
         self.device = device
-        logging.basicConfig(level=logging.INFO)
-        self.logger = logging.getLogger()
         if checkpoint_path is not None:
             self.model.load_state_dict(torch.load(checkpoint_path))
 
@@ -135,7 +135,7 @@ class TGNWrapper(TGNNWrapper):
         edge_ids = edge_ids[~np.isin(edge_ids, edges_to_drop)]
         source_nodes, target_nodes, timestamps, edge_ids = self.extract_event_information(edge_ids)
         # Insert a new neighborhood finder so that the model does not consider dropped edges
-        original_ngh_finder = self.model.ngh_finder
+        original_ngh_finder = self.model.neighbor_finder
         self.model.set_neighbor_finder(get_neighbor_finder(self.dataset.to_data_object(edges_to_drop=edges_to_drop),
                                                            uniform=False))
         # Rollout the events from the subgraph
