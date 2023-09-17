@@ -8,7 +8,7 @@ def filter_subgraph(base_event_id: int, excluded_events: np.ndarray, subgraph: p
     return subgraph[~subgraph[COL_ID].isin(excluded_events)]
 
 
-class EventSampler:
+class EdgeSampler:
 
     def __init__(self, subgraph: pd.DataFrame):
         self.subgraph = subgraph
@@ -17,7 +17,7 @@ class EventSampler:
         raise NotImplementedError
 
 
-class RandomEventSampler(EventSampler):
+class RandomEdgeSampler(EdgeSampler):
 
     def sample(self, base_event_id: int, excluded_events: np.ndarray, size: int) -> np.ndarray:
         filtered_subgraph = filter_subgraph(base_event_id, excluded_events, self.subgraph)
@@ -26,7 +26,7 @@ class RandomEventSampler(EventSampler):
         return filtered_subgraph.sample(n=size, replace=False)[COL_ID].to_numpy()
 
 
-class RecentEventSampler(EventSampler):
+class RecentEdgeSampler(EdgeSampler):
 
     def sample(self, base_event_id: int, excluded_events: np.ndarray, size: int) -> np.ndarray:
         filtered_subgraph = filter_subgraph(base_event_id, excluded_events, self.subgraph)
@@ -35,7 +35,7 @@ class RecentEventSampler(EventSampler):
         return filtered_subgraph[COL_ID].to_numpy()[-size:]
 
 
-class ClosestEventSampler(EventSampler):
+class ClosestEdgeSampler(EdgeSampler):
 
     def sample(self, base_event_id: int, excluded_events: np.ndarray, size: int) -> np.ndarray:
         # This should sort the possible events by their distance to the

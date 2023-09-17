@@ -4,7 +4,7 @@ from CFTGNNExplainer.connector.bridge import TGNNBridge
 from CFTGNNExplainer.constants import COL_ID, EXPLAINED_EVENT_MEMORY_LABEL, CURRENT_ITERATION_MIN_EVENT_MEMORY_LABEL
 from CFTGNNExplainer.data.subgraph import SubgraphGenerator
 from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample
-from CFTGNNExplainer.explainer.sampler import EventSampler, RandomEventSampler, RecentEventSampler, ClosestEventSampler
+from CFTGNNExplainer.explainer.sampler import EdgeSampler, RandomEdgeSampler, RecentEdgeSampler, ClosestEdgeSampler
 
 
 def is_prediction_most_shifted(original_prediction: float, prediction_to_assess: float, previous_delta: float):
@@ -29,13 +29,13 @@ class GreedyCFExplainer(Explainer):
         self.sample_size = sample_size
         self.sampling_strategy = sampling_strategy
 
-    def _create_sampler(self, subgraph: pd.DataFrame) -> EventSampler:
+    def _create_sampler(self, subgraph: pd.DataFrame) -> EdgeSampler:
         if self.sampling_strategy == 'random':
-            return RandomEventSampler(subgraph)
+            return RandomEdgeSampler(subgraph)
         elif self.sampling_strategy == 'recent':
-            return RecentEventSampler(subgraph)
+            return RecentEdgeSampler(subgraph)
         elif self.sampling_strategy == 'closest':
-            return ClosestEventSampler(subgraph)
+            return ClosestEdgeSampler(subgraph)
         else:
             raise NotImplementedError(f'No sampler implemented for sampling strategy {self.sampling_strategy}')
 
@@ -48,7 +48,7 @@ class GreedyCFExplainer(Explainer):
 
         self.tgnn_bridge.set_evaluation_mode(True)
         self.tgnn_bridge.reset_model()
-        self.tgnn_bridge.initialize(min_event_id, show_progress=True, memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
+        self.tgnn_bridge.initialize(min_event_id, show_progress=verbose, memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
         self.tgnn_bridge.initialize(explained_event_id - 1)
         original_prediction, _ = self.tgnn_bridge.predict(explained_event_id, result_as_logit=True)
         original_prediction = original_prediction.detach().cpu().item()
