@@ -22,6 +22,7 @@ class TGNNWrapper:
         self.dataset = dataset
         self.name = model_name
         self.latest_event_id = 0
+        self.evaluation_mode = False
 
     def rollout_until_event(self, event_id: int = None, batch_data: BatchData = None,
                             progress_bar: ProgressBar = None) -> None:
@@ -29,7 +30,13 @@ class TGNNWrapper:
 
     def compute_edge_probabilities(self, source_nodes: np.ndarray, target_nodes: np.ndarray,
                                    edge_timestamps: np.ndarray, edge_ids: np.ndarray,
-                                   negative_nodes: np.ndarray | None = None, result_as_logit: bool = False):
+                                   negative_nodes: np.ndarray | None = None, result_as_logit: bool = False,
+                                   perform_memory_update: bool = True):
+        raise NotImplementedError
+
+    def compute_edge_probabilities_for_subgraph(self, event_id, subgraph_events: np.ndarray,
+                                                edges_to_drop: np.ndarray,
+                                                result_as_logit: bool = False) -> (torch.Tensor, torch.Tensor):
         raise NotImplementedError
 
     def get_memory(self):
@@ -44,6 +51,14 @@ class TGNNWrapper:
     def reset_model(self):
         raise NotImplementedError
 
+    def activate_evaluation_mode(self):
+        self.model.eval()
+        self.evaluation_mode = True
+
+    def activate_train_mode(self):
+        self.model.train()
+        self.evaluation_mode = False
+
     def reset_latest_event_id(self, value: int = None):
         if value is not None:
             self.latest_event_id = value
@@ -51,10 +66,9 @@ class TGNNWrapper:
             self.latest_event_id = 0
 
     def extract_event_information(self, event_ids: int | np.ndarray):
-        source_nodes, target_nodes, timestamps = self.dataset.source_node_ids[event_ids], \
-            self.dataset.target_node_ids[event_ids], self.dataset.timestamps[event_ids]
-        if type(event_ids) is int or type(event_ids) is np.int64:
-            return np.array([source_nodes, ]), np.array([target_nodes, ]), np.array([timestamps, ]), np.array([event_ids, ])
+        edge_mask = np.isin(self.dataset.edge_ids, event_ids)
+        source_nodes, target_nodes, timestamps = self.dataset.source_node_ids[edge_mask], \
+            self.dataset.target_node_ids[edge_mask], self.dataset.timestamps[edge_mask]
         return source_nodes, target_nodes, timestamps, event_ids
 
 
@@ -110,6 +124,30 @@ class TGNWrapper(TGNNWrapper):
         return self.model.compute_edge_probabilities(source_nodes, target_nodes, negative_nodes, edge_timestamps,
                                                      edge_ids, self.n_neighbors, result_as_logit, perform_memory_update)
 
+    def compute_edge_probabilities_for_subgraph(self, event_id, subgraph_events: np.ndarray,
+                                                edges_to_drop: np.ndarray,
+                                                result_as_logit: bool = False) -> (torch.Tensor, torch.Tensor):
+        if not self.evaluation_mode:
+            self.logger.info('Model not in evaluation mode. Do not use predictions for evaluation purposes!')
+        edge_ids = self.dataset.edge_ids
+        edge_ids = edge_ids[edge_ids < event_id]
+        edge_ids = edge_ids[edge_ids > self.latest_event_id]
+        edge_ids = edge_ids[~np.isin(edge_ids, edges_to_drop)]
+        source_nodes, target_nodes, timestamps, edge_ids = self.extract_event_information(edge_ids)
+        # Insert a new neighborhood finder so that the model does not consider dropped edges
+        original_ngh_finder = self.model.ngh_finder
+        self.model.set_neighbor_finder(get_neighbor_finder(self.dataset.to_data_object(edges_to_drop=edges_to_drop),
+                                                           uniform=False))
+        # Rollout the events from the subgraph
+        self.rollout_until_event(batch_data=BatchData(source_nodes, target_nodes, timestamps, edge_ids))
+
+        source_node, target_node, timestamp, edge_id = self.extract_event_information(event_ids=event_id)
+        probabilities = self.compute_edge_probabilities(source_node, target_node, timestamp, edge_id,
+                                                        result_as_logit=result_as_logit, perform_memory_update=False)
+        # Reinsert the original neighborhood finder so that the model can be used as usual
+        self.model.set_neighbor_finder(original_ngh_finder)
+        return probabilities
+
     def get_memory(self):
         return self.model.memory.backup_memory()
 
@@ -145,8 +183,7 @@ class TGNWrapper(TGNNWrapper):
         # NB: in the inductive setting, negatives are sampled only amongst other new nodes
         train_random_sampler = RandEdgeSampler(train_data.sources, train_data.destinations)
         val_random_sampler = RandEdgeSampler(full_data.sources, full_data.destinations, seed=0)
-        new_nodes_val_random_sampler = RandEdgeSampler(new_node_val_data.sources, new_node_val_data.destinations,
-                                                       seed=1)
+        nn_val_random_sampler = RandEdgeSampler(new_node_val_data.sources, new_node_val_data.destinations, seed=1)
         test_random_sampler = RandEdgeSampler(full_data.sources, full_data.destinations, seed=2)
         new_nodes_test_random_sampler = RandEdgeSampler(new_node_test_data.sources,
                                                         new_node_test_data.destinations,
@@ -244,8 +281,7 @@ class TGNWrapper(TGNNWrapper):
 
             # Validate on unseen nodes
             new_nodes_val_ap, nn_val_auc, nn_val_acc = eval_edge_prediction(model=self.model,
-                                                                            negative_edge_sampler=
-                                                                            new_nodes_val_random_sampler,
+                                                                            negative_edge_sampler=nn_val_random_sampler,
                                                                             data=new_node_val_data,
                                                                             n_neighbors=self.n_neighbors)
 
