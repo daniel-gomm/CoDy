@@ -102,6 +102,8 @@ class TreeNode:
     def select_next_leaf(self, max_depth: int) -> TreeNode:
         """
         Select the next leaf node for expansion
+        @param max_depth: Maximum depth at which to search for leaf nodes
+        @return: Leaf node to expand
         """
         if self.is_leaf():
             return self
@@ -125,8 +127,12 @@ class TreeNode:
 
     def selection_backpropagation(self):
         """
-        Propagate the information that a node is selected backwards
+        Propagate the information that a node is selected backwards and update scores
         """
+        if not self.is_leaf():
+            avg_exploitation_score = sum(child.exploitation_score for child in self.children) / len(self.children)
+            # TODO: Assess if this should be max or just the avg or if the best score should be propagated backwards
+            self.exploitation_score = max(self.exploitation_score, avg_exploitation_score)
         self.number_of_selections += 1
         if self.parent is not None:
             self.parent.selection_backpropagation()
@@ -159,7 +165,8 @@ class SearchingCFExplainer(Explainer):
         self.sample_size = sample_size
         self.max_steps = max_steps
 
-    def expand_node(self, explained_edge_id: int, node_to_expand: TreeNode, sampler: EdgeSampler) -> List[TreeNode]:
+    def expand_node(self, explained_edge_id: int, node_to_expand: TreeNode, sampler: EdgeSampler,
+                    known_cf_examples: List[np.ndarray] | None = None) -> List[TreeNode]:
         counterfactual_examples: List[TreeNode] = []
         original_prediction = node_to_expand.original_prediction
         if not node_to_expand.is_leaf():
@@ -172,7 +179,7 @@ class SearchingCFExplainer(Explainer):
             node = node.parent
 
         sampled_edge_ids = sampler.sample(explained_edge_id, excluded_events=np.array(edge_ids_to_exclude),
-                                          size=self.sample_size)
+                                          size=self.sample_size, known_cf_examples=known_cf_examples)
         if self.verbose:
             self.logger.info(f'Selected node {str(node_to_expand.edge_id)} and excluded edge ids '
                              f'{str(edge_ids_to_exclude)}')
@@ -196,6 +203,7 @@ class SearchingCFExplainer(Explainer):
     def explain(self, explained_event_id: int):
         original_prediction, sampler = self.initialize_explanation(explained_event_id)
         best_cf_example = None
+        known_cf_examples = []
         max_depth = sys.maxsize
         root_node = TreeNode(explained_event_id, parent=None, prediction=original_prediction,
                              original_prediction=original_prediction)
@@ -206,11 +214,12 @@ class SearchingCFExplainer(Explainer):
             node_to_expand.selection_backpropagation()
             if node_to_expand == root_node and root_node.expanded:
                 break  # No nodes are selectable, meaning that we can conclude the search
-            cf_examples = self.expand_node(explained_event_id, node_to_expand, sampler)
+            cf_examples = self.expand_node(explained_event_id, node_to_expand, sampler, known_cf_examples)
             node_to_expand.expanded = True
             if len(cf_examples) > 0:
                 best_cf_example = select_best_cf_example(best_cf_example, cf_examples)
                 max_depth = best_cf_example.depth
+                known_cf_examples.extend(np.array(example.to_cf_example().event_ids) for example in cf_examples)
                 if self.verbose:
                     self.logger.info(f'Found counterfactual explanation (could be old): '
                                      + str(best_cf_example.to_cf_example()))
