@@ -36,8 +36,7 @@ class TGNNWrapper:
                                    perform_memory_update: bool = True):
         raise NotImplementedError
 
-    def compute_edge_probabilities_for_subgraph(self, event_id, subgraph_events: np.ndarray,
-                                                edges_to_drop: np.ndarray,
+    def compute_edge_probabilities_for_subgraph(self, event_id, edges_to_drop: np.ndarray,
                                                 result_as_logit: bool = False) -> (torch.Tensor, torch.Tensor):
         raise NotImplementedError
 
@@ -124,8 +123,7 @@ class TGNWrapper(TGNNWrapper):
         return self.model.compute_edge_probabilities(source_nodes, target_nodes, negative_nodes, edge_timestamps,
                                                      edge_ids, self.n_neighbors, result_as_logit, perform_memory_update)
 
-    def compute_edge_probabilities_for_subgraph(self, event_id, subgraph_events: np.ndarray,
-                                                edges_to_drop: np.ndarray,
+    def compute_edge_probabilities_for_subgraph(self, event_id, edges_to_drop: np.ndarray,
                                                 result_as_logit: bool = False) -> (torch.Tensor, torch.Tensor):
         if not self.evaluation_mode:
             self.logger.info('Model not in evaluation mode. Do not use predictions for evaluation purposes!')

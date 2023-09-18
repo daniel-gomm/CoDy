@@ -49,11 +49,8 @@ class GreedyCFExplainer(Explainer):
             self.tgnn_bridge.initialize(min_event_id, show_progress=False,
                                         memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
             for candidate_event_id in candidate_events:
-                current_subgraph = remaining_subgraph[remaining_subgraph != candidate_event_id]
-
-                current_subgraph_prediction = self.calculate_subgraph_prediction(candidate_events, current_subgraph,
-                                                                                 cf_example_events, explained_event_id,
-                                                                                 candidate_event_id)
+                current_subgraph_prediction = self.calculate_subgraph_prediction(candidate_events, cf_example_events,
+                                                                                 explained_event_id, candidate_event_id)
                 is_most_shifted, delta = is_prediction_most_shifted(original_prediction, current_subgraph_prediction,
                                                                     largest_prediction_delta)
                 if verbose:

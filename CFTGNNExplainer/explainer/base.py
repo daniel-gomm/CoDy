@@ -32,7 +32,7 @@ class CounterFactualExample:
         return self.get_absolute_importances() / self.event_importances[-1]
 
 
-def calculate_prediction_delta(original_prediction: float, prediction_to_assess: float):
+def calculate_prediction_delta(original_prediction: float, prediction_to_assess: float) -> float:
     if prediction_to_assess * original_prediction < 0:
         return abs(prediction_to_assess) + abs(original_prediction)
     return abs(original_prediction) - abs(prediction_to_assess)
@@ -59,7 +59,7 @@ class Explainer:
         else:
             raise NotImplementedError(f'No sampler implemented for sampling strategy {self.sampling_strategy}')
 
-    def calculate_original_score(self, explained_event_id: int, min_event_id: int, verbose: bool = False):
+    def calculate_original_score(self, explained_event_id: int, min_event_id: int, verbose: bool = False) -> float:
         self.tgnn_bridge.initialize(min_event_id, show_progress=verbose, memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
         self.tgnn_bridge.initialize(explained_event_id - 1)
         original_prediction, _ = self.tgnn_bridge.predict(explained_event_id, result_as_logit=True)
@@ -68,13 +68,11 @@ class Explainer:
             self.logger.info(f'Original prediction {original_prediction}')
         return original_prediction
 
-    def calculate_subgraph_prediction(self, candidate_events: np.ndarray,
-                                      subgraph: np.ndarray, cf_example_events: List[int], explained_event_id: int,
-                                      candidate_event_id: int):
+    def calculate_subgraph_prediction(self, candidate_events: np.ndarray, cf_example_events: List[int],
+                                      explained_event_id: int, candidate_event_id: int) -> float:
         self.tgnn_bridge.initialize(np.min(candidate_events) - 1, show_progress=False,
                                     memory_label=CURRENT_ITERATION_MIN_EVENT_MEMORY_LABEL)
         subgraph_prediction, _ = self.tgnn_bridge.predict_from_subgraph(explained_event_id,
-                                                                        subgraph,
                                                                         np.array(cf_example_events +
                                                                                  [candidate_event_id]),
                                                                         result_as_logit=True)
