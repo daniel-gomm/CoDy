@@ -2,7 +2,7 @@ from typing import List
 
 import numpy as np
 import pandas as pd
-from CFTGNNExplainer.constants import COL_ID
+from CFTGNNExplainer.constants import COL_ID, COL_SUBGRAPH_DISTANCE, COL_TIMESTAMP
 
 
 def filter_subgraph(base_event_id: int, excluded_events: np.ndarray, subgraph: pd.DataFrame,
@@ -55,8 +55,12 @@ class ClosestEdgeSampler(EdgeSampler):
 
     def sample(self, base_event_id: int, excluded_events: np.ndarray, size: int,
                known_cf_examples: List[np.ndarray] | None = None) -> np.ndarray:
-        # TODO: This should sort the possible events by their distance to the base event
-        raise NotImplementedError
+        filtered_subgraph = filter_subgraph(base_event_id, excluded_events, self.subgraph, known_cf_examples)
+        if len(filtered_subgraph) < size:
+            return filtered_subgraph[COL_ID].to_numpy()
+        sorted_subgraph = filtered_subgraph.sort_values(by=[COL_TIMESTAMP, COL_SUBGRAPH_DISTANCE],
+                                                        ascending=[True, False])
+        return sorted_subgraph[COL_ID].to_numpy()[:size]
 
 
 class PretrainedEdgeSampler(EdgeSampler):
