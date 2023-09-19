@@ -18,7 +18,6 @@ def filter_subgraph(base_event_id: int, excluded_events: np.ndarray, subgraph: p
                 already_excluded_events = excluded_events[np.isin(excluded_events, cf_example)]
                 event_to_exclude = cf_example[~np.isin(cf_example, already_excluded_events)][0]
                 further_events_to_exclude.append(event_to_exclude)
-    print(further_events_to_exclude)
     return filtered_subgraph[~filtered_subgraph[COL_ID].isin(further_events_to_exclude)]
 
 
