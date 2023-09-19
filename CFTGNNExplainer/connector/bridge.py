@@ -19,7 +19,7 @@ class TGNNBridge:
     def predict(self, event_id: int, result_as_logit: bool = False):
         raise NotImplementedError
 
-    def predict_from_subgraph(self, event_id: int, subgraph_events: np.ndarray, edges_to_drop: np.ndarray,
+    def predict_from_subgraph(self, event_id: int, edges_to_drop: np.ndarray,
                               result_as_logit: bool = False):
         raise NotImplementedError
 
@@ -73,9 +73,9 @@ class DynamicTGNNBridge(TGNNBridge):
                                                      result_as_logit=result_as_logit,
                                                      perform_memory_update=False)
 
-    def predict_from_subgraph(self, event_id: int, subgraph_events: np.ndarray, edges_to_drop: np.ndarray,
+    def predict_from_subgraph(self, event_id: int, edges_to_drop: np.ndarray,
                               result_as_logit: bool = False):
-        return self.model.compute_edge_probabilities_for_subgraph(event_id, subgraph_events, edges_to_drop,
+        return self.model.compute_edge_probabilities_for_subgraph(event_id, edges_to_drop,
                                                                   result_as_logit=result_as_logit)
 
     def remove_memory_backup(self, label: str):

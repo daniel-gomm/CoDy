@@ -1,10 +1,11 @@
 import numpy as np
 import pandas as pd
-from CFTGNNExplainer.constants import COL_NODE_I, COL_NODE_U, COL_ID
+from CFTGNNExplainer.constants import COL_NODE_I, COL_NODE_U, COL_ID, COL_SUBGRAPH_DISTANCE
 from CFTGNNExplainer.data.dataset import ContinuousTimeDynamicGraphDataset
 
 
-def _extract_center_node_ids(subgraph_events: pd.DataFrame, base_event_ids: [int], directed: bool = False):
+def _extract_center_node_ids(subgraph_events: pd.DataFrame, base_event_ids: [int], directed: bool = False) \
+        -> np.ndarray:
     # Ids of the nodes that are involved in the base events
     center_node_ids = list(subgraph_events[subgraph_events[COL_ID].isin(base_event_ids)][COL_NODE_I].values)
     if not directed:
@@ -12,7 +13,7 @@ def _extract_center_node_ids(subgraph_events: pd.DataFrame, base_event_ids: [int
         center_node_ids.extend(
             list(subgraph_events[subgraph_events[COL_ID].isin(base_event_ids)][COL_NODE_U].values)
         )
-    return center_node_ids
+    return np.array(center_node_ids)
 
 
 class SubgraphGenerator:
@@ -58,7 +59,17 @@ class SubgraphGenerator:
             # Iteratively explore the neighborhood of the base nodes
             reached_nodes.append(self._get_next_hop_neighbors(reached_nodes[-1], source_nodes, target_nodes, node_mask))
 
-        neighboring_nodes = np.unique(np.concatenate([np.array(nodes) for nodes in reached_nodes]))
+        neighboring_nodes = np.unique(np.concatenate(reached_nodes))
+
+        distance_from_base_event = np.repeat(num_hops + 2, len(subgraph_events))  # Set default distance
+
+        for index, nodes in enumerate(reached_nodes):
+            if index > 0:
+                nodes = nodes[~np.isin(nodes, reached_nodes[index - 1])]
+            distance_from_base_event[subgraph_events[COL_NODE_I].isin(nodes)] = index
+            distance_from_base_event[subgraph_events[COL_NODE_U].isin(nodes)] = index
+
+        subgraph_events[COL_SUBGRAPH_DISTANCE] = distance_from_base_event
 
         node_mask.fill(False)
         node_mask[neighboring_nodes] = True
@@ -102,10 +113,10 @@ class SubgraphGenerator:
 
         return selected_events.drop('selected', axis=1)
 
-    def _get_next_hop_neighbors(self, reached_nodes: [int], source_nodes: np.ndarray, target_nodes: np.ndarray,
-                                node_mask: np.ndarray) -> [int]:
+    def _get_next_hop_neighbors(self, reached_nodes: np.ndarray, source_nodes: np.ndarray, target_nodes: np.ndarray,
+                                node_mask: np.ndarray) -> np.ndarray:
         node_mask.fill(False)
-        node_mask[np.array(reached_nodes)] = True
+        node_mask[reached_nodes] = True
         source_target_edge_mask = node_mask[source_nodes]
         new_nodes_reached = target_nodes[source_target_edge_mask]
         if not self.directed:
@@ -113,4 +124,4 @@ class SubgraphGenerator:
             new_source_nodes_reached = source_nodes[target_source_edge_mask]
             new_nodes_reached = np.concatenate((new_source_nodes_reached, new_nodes_reached))
 
-        return np.unique(new_nodes_reached).tolist()
+        return np.unique(new_nodes_reached)
