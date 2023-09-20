@@ -41,7 +41,7 @@ def calculate_prediction_delta(original_prediction: float, prediction_to_assess:
 class Explainer:
 
     def __init__(self, tgnn_bridge: TGNNBridge, sampling_strategy: str = 'recent', candidates_size: int = 75,
-                 verbose: bool = False):
+                 sample_size: int = 10, verbose: bool = False):
         self.tgnn_bridge = tgnn_bridge
         self.dataset = self.tgnn_bridge.model.dataset
         self.subgraph_generator = SubgraphGenerator(self.dataset)
@@ -49,8 +49,9 @@ class Explainer:
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger()
         self.sampling_strategy = sampling_strategy
-        self.verbose = verbose
         self.candidates_size = candidates_size
+        self.sample_size = sample_size
+        self.verbose = verbose
 
     def _create_sampler(self, subgraph: pd.DataFrame) -> EdgeSampler:
         """

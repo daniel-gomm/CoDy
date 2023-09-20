@@ -1,5 +1,4 @@
 import numpy as np
-from CFTGNNExplainer.connector.bridge import TGNNBridge
 from CFTGNNExplainer.constants import COL_ID, EXPLAINED_EVENT_MEMORY_LABEL, CUR_IT_MIN_EVENT_MEM_LBL
 from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample, calculate_prediction_delta
 
@@ -21,11 +20,6 @@ def is_prediction_most_shifted(original_prediction: float, prediction_to_assess:
 
 class GreedyCFExplainer(Explainer):
 
-    def __init__(self, tgnn_bridge: TGNNBridge, candidates_size: int = 75, sample_size: int = 10,
-                 sampling_strategy: str = 'recent', verbose: bool = False):
-        super().__init__(tgnn_bridge, sampling_strategy, candidates_size, verbose)
-        self.sample_size = sample_size
-
     def explain(self, explained_event_id: int) -> CounterFactualExample:
         original_prediction, sampler = self.initialize_explanation(explained_event_id)
         min_event_id = sampler.subgraph[COL_ID].min() - 1
@@ -36,11 +30,11 @@ class GreedyCFExplainer(Explainer):
         cf_example_importances = []
         achieved_counterfactual_explanation = True
         largest_prediction_delta = 0
+        i = 1
         while cf_example_prediction * original_prediction > 0:
             candidate_events = sampler.sample(explained_event_id, np.array(cf_example_events), size=self.sample_size)
             most_shifted_prediction = cf_example_prediction
             most_shifting_event_id = None
-            i = 1
             self.tgnn_bridge.initialize(min_event_id, show_progress=False,
                                         memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
             for candidate_event_id in candidate_events:

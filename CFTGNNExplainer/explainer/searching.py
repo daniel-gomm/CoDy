@@ -161,8 +161,8 @@ class SearchingCFExplainer(Explainer):
 
     def __init__(self, tgnn_bridge: TGNNBridge, candidates_size: int = 75, sample_size: int = 10,
                  sampling_strategy: str = 'recent', max_steps: int = 50, verbose: bool = False):
-        super().__init__(tgnn_bridge, sampling_strategy, candidates_size=candidates_size, verbose=verbose)
-        self.sample_size = sample_size
+        super().__init__(tgnn_bridge, sampling_strategy, candidates_size=candidates_size, sample_size=sample_size,
+                         verbose=verbose)
         self.max_steps = max_steps
 
     def expand_node(self, explained_edge_id: int, node_to_expand: TreeNode, sampler: EdgeSampler,
