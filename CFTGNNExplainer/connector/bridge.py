@@ -9,9 +9,8 @@ from CFTGNNExplainer.utils import ProgressBar
 
 class TGNNBridge:
 
-    def __init__(self, model: TGNNWrapper, explanation_candidates_size: int = 30):
+    def __init__(self, model: TGNNWrapper):
         self.model = model
-        self.explanation_candidates_size = explanation_candidates_size
         self.memory_backups_map = {}
 
     def initialize(self, event_id: int, show_progress: bool = False, memory_label: str = None):
@@ -39,8 +38,8 @@ class TGNNBridge:
 
 class DynamicTGNNBridge(TGNNBridge):
 
-    def __init__(self, model: TGNNWrapper, explanation_candidates_size: int = 30):
-        super().__init__(model=model, explanation_candidates_size=explanation_candidates_size)
+    def __init__(self, model: TGNNWrapper):
+        super().__init__(model=model)
         self.model.reset_model()
         self.model.reset_latest_event_id()  # Reset to a clean state
 
