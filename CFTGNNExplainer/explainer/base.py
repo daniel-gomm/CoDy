@@ -120,4 +120,9 @@ class Explainer:
         return subgraph_prediction
 
     def explain(self, explained_event_id: int) -> CounterFactualExample:
+        """
+        Explain the provided event
+        @param explained_event_id: Event id to explain
+        @return: The counterfactual explanation
+        """
         raise NotImplementedError
