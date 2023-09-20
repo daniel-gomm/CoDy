@@ -12,6 +12,7 @@ class TGNNBridge:
     def __init__(self, model: TGNNWrapper, explanation_candidates_size: int = 30):
         self.model = model
         self.explanation_candidates_size = explanation_candidates_size
+        self.memory_backups_map = {}
 
     def initialize(self, event_id: int, show_progress: bool = False, memory_label: str = None):
         raise NotImplementedError
@@ -42,7 +43,6 @@ class DynamicTGNNBridge(TGNNBridge):
         super().__init__(model=model, explanation_candidates_size=explanation_candidates_size)
         self.model.reset_model()
         self.model.reset_latest_event_id()  # Reset to a clean state
-        self.memory_backups_map = {}
 
     def initialize(self, event_id: int, show_progress: bool = False, memory_label: str = None):
         if memory_label is not None and memory_label in self.memory_backups_map.keys():
