@@ -43,3 +43,4 @@ class ProgressBar:
 
     def update_postfix(self, postfix: str):
         self.progress_bar.postfix = postfix
+        self.progress_bar.update(0)

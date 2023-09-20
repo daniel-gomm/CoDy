@@ -109,7 +109,7 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--filepath', type=str, required=True, help='Path to the dataset csv file')
     parser.add_argument('-t', '--target', type=str, required=True,
                         help='Directory to which the processed dataset is to be stored to')
-    parser.add_argument('-n', '--node-features', type=str, default=None,
+    parser.add_argument('-n', '--node_features', type=str, default=None,
                         help='Path to file with node features')
     parser.add_argument('-b', '--bipartite', action='store_true', help='Whether the graph is bipartite')
 
@@ -122,7 +122,7 @@ if __name__ == '__main__':
     filepath = args.filepath
     save_dir = args.target
 
-    node_features_filepath = args.nodefeatures
+    node_features_filepath = args.node_features
     is_bipartite = args.bipartite
 
     preprocess_data(filepath, save_dir, is_bipartite, node_features_filepath)
