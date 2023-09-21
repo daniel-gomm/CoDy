@@ -78,7 +78,8 @@ class DynamicTGNNBridge(TGNNBridge):
                                                                   result_as_logit=result_as_logit)
 
     def remove_memory_backup(self, label: str):
-        del self.memory_backups_map[label]
+        if label in self.memory_backups_map:
+            del self.memory_backups_map[label]
 
     def reset_model(self):
         self.model.reset_model()

@@ -12,9 +12,6 @@ from CFTGNNExplainer.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_
 
 
 def select_best_cf_example(current_best_example: TreeNode | None, candidate_examples: List[TreeNode]) -> TreeNode:
-    """
-    Breadth-first search for explanation that comes closest to counterfactual example
-    """
     sorted_candidates = sorted(candidate_examples, key=lambda node: node.depth)
     min_depth = sorted_candidates[0].depth
     if current_best_example is not None and min_depth > current_best_example.depth:
@@ -25,18 +22,23 @@ def select_best_cf_example(current_best_example: TreeNode | None, candidate_exam
     if current_best_example is None:
         return best_candidate
     if (min_depth < current_best_example.depth or
-            best_candidate.exploitation_score > current_best_example.exploitation_score):
+            calculate_prediction_delta(current_best_example.original_prediction, current_best_example.prediction) >
+            calculate_prediction_delta(best_candidate.original_prediction, best_candidate.prediction)):
         return best_candidate
     return current_best_example
 
 
 def find_best_non_counterfactual_example(root_node: TreeNode) -> TreeNode:
+    """
+        Breadth-first search for explanation that comes closest to counterfactual example
+    """
     best_example = root_node
     nodes_to_visit = root_node.children
     while len(nodes_to_visit) != 0:
         explored_node = nodes_to_visit.pop()
         if explored_node.is_leaf():
-            if best_example.exploitation_score < explored_node.exploitation_score:
+            if (calculate_prediction_delta(best_example.original_prediction, best_example.prediction) <
+                    calculate_prediction_delta(explored_node.original_prediction, explored_node.prediction)):
                 best_example = explored_node
         else:
             nodes_to_visit.extend(explored_node.children)
@@ -105,7 +107,7 @@ class TreeNode:
         @param max_depth: Maximum depth at which to search for leaf nodes
         @return: Leaf node to expand
         """
-        if self.is_leaf():
+        if self.is_leaf() or self.depth == max_depth:
             return self
         selected_child = None
         best_score = 0
@@ -212,6 +214,8 @@ class SearchingCFExplainer(Explainer):
             step += 1
             node_to_expand = root_node.select_next_leaf(max_depth)
             node_to_expand.selection_backpropagation()
+            if node_to_expand.depth == max_depth:
+                continue
             if node_to_expand == root_node and root_node.expanded:
                 break  # No nodes are selectable, meaning that we can conclude the search
             cf_examples = self.expand_node(explained_event_id, node_to_expand, sampler, known_cf_examples)

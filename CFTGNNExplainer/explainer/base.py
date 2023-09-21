@@ -29,6 +29,8 @@ class CounterFactualExample:
                          enumerate(self.event_importances)])
 
     def get_relative_importances(self) -> np.ndarray:
+        if len(self.event_importances) == 0:
+            return np.ndarray([])
         return self.get_absolute_importances() / self.event_importances[-1]
 
 

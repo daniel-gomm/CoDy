@@ -90,14 +90,14 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
         statistics = {}
         start_time = time.time_ns()
         sampler = self.initialize_explanation_evaluation(explained_event_id)
-        if self.last_min_id > 0:
+        min_event_id = sampler.subgraph[COL_ID].min() - 1
+        if 0 < self.last_min_id <= min_event_id:
             self.tgnn_bridge.initialize(self.last_min_id, show_progress=False,
                                         memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
-            self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
+        self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
 
         oracle_calls = 0
         oracle_call_time = 0
-        min_event_id = sampler.subgraph[COL_ID].min() - 1
         remaining_subgraph = sampler.subgraph[COL_ID].to_numpy()
         remaining_subgraph = remaining_subgraph[remaining_subgraph != explained_event_id]
         cf_example_prediction = original_prediction  # Initialize to orig prediction as complete subgraph is considered
@@ -191,7 +191,7 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
         counterfactual_examples: List[TreeNode] = []
         original_prediction = node_to_expand.original_prediction
         if not node_to_expand.is_leaf():
-            return counterfactual_examples
+            return counterfactual_examples, oracle_calls, oracle_call_time
 
         edge_ids_to_exclude = []
         node = node_to_expand
@@ -230,10 +230,11 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
         statistics = {}
         start_time = time.time_ns()
         sampler = self.initialize_explanation_evaluation(explained_event_id)
-        if self.last_min_id > 0:
+        min_event_id = sampler.subgraph[COL_ID].min() - 1
+        if 0 < self.last_min_id <= min_event_id:
             self.tgnn_bridge.initialize(self.last_min_id, show_progress=False,
                                         memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
-            self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
+        self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
         oracle_calls = 0
         oracle_call_time = 0
 
@@ -249,6 +250,8 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
             step += 1
             node_to_expand = root_node.select_next_leaf(max_depth)
             node_to_expand.selection_backpropagation()
+            if node_to_expand.depth == max_depth:
+                continue
             if node_to_expand == root_node and root_node.expanded:
                 break  # No nodes are selectable, meaning that we can conclude the search
             cf_examples, ex_oracle_calls, ex_oracle_call_time = self.expand_node(explained_event_id, node_to_expand,
