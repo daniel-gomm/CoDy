@@ -1,3 +1,6 @@
 [submodule "submodules/tgn"]
 	path = submodules/tgn
 	url = https://github.com/daniel-gomm/tgn-packaged.git
+[submodule "submodules/ttgn"]
+	path = submodules/ttgn
+	url = https://github.com/daniel-gomm/ttgn-packaged.git
