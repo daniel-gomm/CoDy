@@ -18,11 +18,12 @@ class TGNNWrapper:
     time_embedding_dimension: int
 
     def __init__(self, model: torch.nn.Module, dataset: ContinuousTimeDynamicGraphDataset, num_hops: int,
-                 model_name: str):
+                 model_name: str, device: str = 'cpu'):
         self.num_hops = num_hops
         self.model = model
         self.dataset = dataset
         self.name = model_name
+        self.device = device
         self.latest_event_id = 0
         self.evaluation_mode = False
         logging.basicConfig(level=logging.INFO)
@@ -33,6 +34,9 @@ class TGNNWrapper:
         raise NotImplementedError
 
     def compute_embeddings(self, source_nodes, target_nodes, edge_times, edge_ids, negative_nodes=None):
+        raise NotImplementedError
+
+    def encode_timestamps(self, timestamps: np.ndarray):
         raise NotImplementedError
 
     def compute_edge_probabilities(self, source_nodes: np.ndarray, target_nodes: np.ndarray,
@@ -83,7 +87,7 @@ class TGNWrapper(TGNNWrapper):
 
     def __init__(self, model: TGN, dataset: ContinuousTimeDynamicGraphDataset, num_hops: int, model_name: str,
                  device: str = 'cpu', n_neighbors: int = 20, batch_size: int = 128, checkpoint_path: str = None):
-        super().__init__(model=model, dataset=dataset, num_hops=num_hops, model_name=model_name)
+        super().__init__(model=model, dataset=dataset, num_hops=num_hops, model_name=model_name, device=device)
         # Set time statistics values
         model.mean_time_shift_src, model.std_time_shift_src, model.mean_time_shift_dst, model.std_time_shift_dst = \
             compute_time_statistics(self.dataset.source_node_ids, self.dataset.target_node_ids, self.dataset.timestamps)
@@ -91,7 +95,6 @@ class TGNWrapper(TGNNWrapper):
         self.model = model
         self.n_neighbors = n_neighbors
         self.batch_size = batch_size
-        self.device = device
         if checkpoint_path is not None:
             self.model.load_state_dict(torch.load(checkpoint_path))
         self.node_embedding_dimension = self.model.embedding_module.embedding_dimension
@@ -130,6 +133,10 @@ class TGNWrapper(TGNNWrapper):
                                                                                     n_neighbors=self.n_neighbors,
                                                                                     perform_memory_update=False))
         return src_node_embedding, target_node_embedding
+
+    def encode_timestamps(self, timestamps: np.ndarray):
+        timestamps = torch.tensor(timestamps, dtype=torch.float32, device=self.device).reshape((1, -1))
+        return self.model.time_encoder(timestamps)
 
     def compute_edge_probabilities(self, source_nodes: np.ndarray, target_nodes: np.ndarray,
                                    edge_timestamps: np.ndarray, edge_ids: np.ndarray,
