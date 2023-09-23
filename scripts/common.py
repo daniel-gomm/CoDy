@@ -1,35 +1,47 @@
-import argparse
-import sys
-import os
 import glob
+import os
+import sys
+from argparse import Namespace, ArgumentParser
 
 import numpy as np
 import pandas as pd
 import torch
 
+from CFTGNNExplainer.connector.tgnnwrapper import TGNWrapper
+from CFTGNNExplainer.data.dataset import ContinuousTimeDynamicGraphDataset, TrainTestDatasetParameters
 from TGN.model.tgn import TGN
 from TGN.utils.utils import get_neighbor_finder
-from CFTGNNExplainer.data.dataset import ContinuousTimeDynamicGraphDataset
-from CFTGNNExplainer.connector.tgnnwrapper import TGNWrapper
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser('T-GNN Training')
 
+def parse_args(parser: ArgumentParser) -> Namespace:
+    try:
+        return parser.parse_args()
+    except SystemExit:
+        parser.print_help()
+        sys.exit(0)
+
+def add_dataset_arguments(parser: ArgumentParser):
     parser.add_argument('-d', '--dataset', required=True, type=str, help='Path to the dataset folder')
-    parser.add_argument('-m', '--model', required=False, default=None, type=str,
-                        help='Path to the model checkpoint to use')
     parser.add_argument('--directed', action='store_true', help='Provide if the graph is directed')
     parser.add_argument('--bipartite', action='store_true', help='Provide if the graph is bipartite')
+
+
+def add_wrapper_model_arguments(parser: ArgumentParser):
+    parser.add_argument('-m', '--model', required=True, default=None, type=str,
+                        help='Path to the model checkpoint to use')
     parser.add_argument('--cuda', action='store_true', help='Use cuda for GPU utilization')
+
+
+def add_model_training_arguments(parser: ArgumentParser):
     parser.add_argument('--model_path', type=str, required=True,
                         help='Path to the directory where the model checkpoints, final model and results are saved to.')
     parser.add_argument('--epochs', type=int, default=50, help='Number of epochs to train the model for.')
 
-    try:
-        args = parser.parse_args()
-    except SystemExit:
-        parser.print_help()
-        sys.exit(0)
+
+def create_dataset_from_args(args: Namespace, parameters: TrainTestDatasetParameters | None = None) -> (
+        ContinuousTimeDynamicGraphDataset):
+    if parameters is None:
+        parameters = TrainTestDatasetParameters(0.2, 0.4, 0.8, 1000, 500, 500)
 
     # Get dataset
     dataset_folder = args.dataset
@@ -48,8 +60,14 @@ if __name__ == '__main__':
     edge_features = np.load(edge_features[0])
     node_features = np.load(node_features[0])
 
-    dataset = ContinuousTimeDynamicGraphDataset(all_event_data, edge_features, node_features, name,
-                                                directed=args.directed, bipartite=args.bipartite)
+    return ContinuousTimeDynamicGraphDataset(all_event_data, edge_features, node_features, name,
+                                             directed=args.directed, bipartite=args.bipartite,
+                                             parameters=parameters)
+
+
+def create_tgn_wrapper_from_args(args: Namespace, dataset: ContinuousTimeDynamicGraphDataset | None = None):
+    if dataset is None:
+        dataset = create_dataset_from_args(args)
 
     device = 'cpu'
     if args.cuda:
@@ -73,12 +91,5 @@ if __name__ == '__main__':
         n_neighbors=20
     )
 
-    tgn_wrapper = TGNWrapper(tgn, dataset, num_hops=2, model_name=name, device=device, n_neighbors=20, batch_size=128)
-
-    model_path = args.model_path
-    checkpoints_path = os.path.join(model_path, 'checkpoints/')
-    if not os.path.exists(checkpoints_path):
-        os.mkdir(checkpoints_path)
-
-    tgn_wrapper.train_model(args.epochs, checkpoint_path=checkpoints_path, model_path=model_path,
-                            results_path=model_path + '/results.pkl')
+    return TGNWrapper(tgn, dataset, num_hops=2, model_name=dataset.name, device=device, n_neighbors=20,
+                      batch_size=128, checkpoint_path=args.model)
