@@ -373,7 +373,7 @@ class TGNNExplainer(Explainer):
     def _get_candidate_weights(self, event_idx):
         candidate_events = self.tgnn_bridge.candidate_events
         self.pg_explainer.explainer.eval()
-        edge_weights = self.pg_explainer.get_event_scores(event_idx, candidate_events, False)
+        edge_weights = self.pg_explainer.get_event_scores(event_idx, candidate_events)
 
         candidate_weights_dict = {
             'candidate_events': torch.tensor(candidate_events, dtype=torch.int64, device=self.device),

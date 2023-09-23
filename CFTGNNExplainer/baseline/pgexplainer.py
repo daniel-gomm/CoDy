@@ -61,7 +61,7 @@ class TPGExplainer(Explainer):
             candidate_events = self.tgnn_bridge.get_candidate_events(explained_event_id)
             if len(candidate_events):
                 return FactualExplanation(np.ndarray([]), np.ndarray([]))
-            edge_weights = self.get_event_scores(explained_event_id, candidate_events, False)
+            edge_weights = self.get_event_scores(explained_event_id, candidate_events)
             edge_weights = edge_weights.cpu().detach().numpy().flatten()
             sorted_indices = np.argsort(edge_weights)[::-1]  # declining
             edge_weights = edge_weights[sorted_indices]
@@ -90,10 +90,9 @@ class TPGExplainer(Explainer):
         state_dict = self.explainer.state_dict()
         torch.save(state_dict, path)
 
-    def get_event_scores(self, explained_event_id, candidate_event_ids, training_mode):
+    def get_event_scores(self, explained_event_id, candidate_event_ids):
         self.tgnn_bridge.initialize(explained_event_id)
-        edge_embeddings = self.embedding.get_embedding(candidate_event_ids, explained_event_id,
-                                                       explanation_mode=not training_mode)
+        edge_embeddings = self.embedding.get_embedding(candidate_event_ids, explained_event_id)
         return self.explainer(edge_embeddings)
 
     def train(self, epochs: int, learning_rate: float, batch_size: int, model_name: str, save_directory: str,
@@ -127,7 +126,7 @@ class TPGExplainer(Explainer):
                 if len(candidate_events) == 0:
                     skipped_events += 1
                     continue
-                edge_weights = self.get_event_scores(event_id, candidate_events, training_mode=True)
+                edge_weights = self.get_event_scores(event_id, candidate_events)
 
                 prob_original_pos, prob_original_neg = self.tgnn_bridge.predict(event_id)
                 prob_masked_pos, prob_masked_neg = self.tgnn_bridge.predict(event_id, candidate_events, edge_weights)
