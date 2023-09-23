@@ -70,7 +70,8 @@ class GreedyCFExplainer(Explainer):
 
         self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
         self.tgnn_bridge.reset_model()
-        return CounterFactualExample(original_prediction=original_prediction,
+        return CounterFactualExample(explained_event_id=explained_event_id,
+                                     original_prediction=original_prediction,
                                      counterfactual_prediction=cf_example_prediction,
                                      achieves_counterfactual_explanation=achieved_counterfactual_explanation,
                                      event_ids=np.array(cf_example_events),

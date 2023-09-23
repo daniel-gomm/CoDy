@@ -24,6 +24,7 @@ class EvaluationCounterFactualExample(CounterFactualExample):
 
     def to_dict(self) -> Dict:
         results = {
+            'explained_event_id': self.explained_event_id,
             'original_prediction': self.original_prediction,
             'counterfactual_prediction': self.counterfactual_prediction,
             'achieves_counterfactual_explanation': self.achieves_counterfactual_explanation,
@@ -160,7 +161,8 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
         statistics['oracle_calls'] = oracle_calls
         statistics['candidate_size'] = len(sampler.subgraph)
         statistics['candidates'] = sampler.subgraph[COL_ID].to_list()
-        cf_example = EvaluationCounterFactualExample(original_prediction=original_prediction,
+        cf_example = EvaluationCounterFactualExample(explained_event_id=explained_event_id,
+                                                     original_prediction=original_prediction,
                                                      counterfactual_prediction=cf_example_prediction,
                                                      achieves_counterfactual_explanation=
                                                      achieved_counterfactual_explanation,
@@ -279,7 +281,8 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
         statistics['candidate_size'] = len(sampler.subgraph)
         statistics['candidates'] = sampler.subgraph[COL_ID].to_list()
         cf_ex = best_cf_example.to_cf_example()
-        eval_cf_example = EvaluationCounterFactualExample(original_prediction=original_prediction,
+        eval_cf_example = EvaluationCounterFactualExample(explained_event_id=explained_event_id,
+                                                          original_prediction=original_prediction,
                                                           counterfactual_prediction=cf_ex.counterfactual_prediction,
                                                           achieves_counterfactual_explanation=
                                                           cf_ex.achieves_counterfactual_explanation,

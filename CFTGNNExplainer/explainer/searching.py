@@ -152,7 +152,8 @@ class TreeNode:
             node = node.parent
         cf_events.reverse()
         cf_event_importances.reverse()
-        return CounterFactualExample(original_prediction=self.original_prediction,
+        return CounterFactualExample(explained_event_id=node.edge_id,
+                                     original_prediction=self.original_prediction,
                                      counterfactual_prediction=self.prediction,
                                      achieves_counterfactual_explanation=self.is_counterfactual,
                                      event_ids=np.array(cf_events),
