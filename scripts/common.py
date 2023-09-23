@@ -20,6 +20,7 @@ def parse_args(parser: ArgumentParser) -> Namespace:
         parser.print_help()
         sys.exit(0)
 
+
 def add_dataset_arguments(parser: ArgumentParser):
     parser.add_argument('-d', '--dataset', required=True, type=str, help='Path to the dataset folder')
     parser.add_argument('--directed', action='store_true', help='Provide if the graph is directed')
@@ -90,6 +91,8 @@ def create_tgn_wrapper_from_args(args: Namespace, dataset: ContinuousTimeDynamic
         dyrep=False,
         n_neighbors=20
     )
+
+    tgn.to(device)
 
     return TGNWrapper(tgn, dataset, num_hops=2, model_name=dataset.name, device=device, n_neighbors=20,
                       batch_size=128, checkpoint_path=args.model)
