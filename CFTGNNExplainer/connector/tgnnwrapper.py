@@ -14,6 +14,8 @@ from CFTGNNExplainer.utils import ProgressBar, construct_model_path
 
 
 class TGNNWrapper:
+    node_embedding_dimension: int
+    time_embedding_dimension: int
 
     def __init__(self, model: torch.nn.Module, dataset: ContinuousTimeDynamicGraphDataset, num_hops: int,
                  model_name: str):
@@ -28,6 +30,9 @@ class TGNNWrapper:
 
     def rollout_until_event(self, event_id: int = None, batch_data: BatchData = None,
                             progress_bar: ProgressBar = None) -> None:
+        raise NotImplementedError
+
+    def compute_embeddings(self, source_nodes, target_nodes, edge_times, edge_ids, negative_nodes=None):
         raise NotImplementedError
 
     def compute_edge_probabilities(self, source_nodes: np.ndarray, target_nodes: np.ndarray,
@@ -89,6 +94,8 @@ class TGNWrapper(TGNNWrapper):
         self.device = device
         if checkpoint_path is not None:
             self.model.load_state_dict(torch.load(checkpoint_path))
+        self.node_embedding_dimension = self.model.embedding_module.embedding_dimension
+        self.time_embedding_dimension = self.model.time_encoder.dimension
 
     def rollout_until_event(self, event_id: int = None, batch_data: BatchData = None,
                             progress_bar: ProgressBar = None) -> None:
@@ -115,6 +122,14 @@ class TGNWrapper(TGNNWrapper):
                 batch_id += 1
 
         self.latest_event_id = event_id
+
+    def compute_embeddings(self, source_nodes, target_nodes, edge_times, edge_ids, negative_nodes=None):
+        src_node_embedding, target_node_embedding, _ = (self.model.
+                                                        compute_temporal_embeddings(source_nodes, target_nodes,
+                                                                                    negative_nodes, edge_times, edge_ids,
+                                                                                    n_neighbors=self.n_neighbors,
+                                                                                    perform_memory_update=False))
+        return src_node_embedding, target_node_embedding
 
     def compute_edge_probabilities(self, source_nodes: np.ndarray, target_nodes: np.ndarray,
                                    edge_timestamps: np.ndarray, edge_ids: np.ndarray,
