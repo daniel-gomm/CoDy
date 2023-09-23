@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from CFTGNNExplainer.baseline.embedding import Embedding
+from CFTGNNExplainer.sampling.embedding import Embedding
 from CFTGNNExplainer.baseline.ttgnbridge import TTGNBridge
 from CFTGNNExplainer.explainer.base import Explainer
 

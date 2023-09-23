@@ -9,7 +9,7 @@ import torch
 
 from CFTGNNExplainer.data.dataset import ContinuousTimeDynamicGraphDataset
 from TTGN.model.tgn import TGN
-from CFTGNNExplainer.baseline.embedding import StaticEmbedding
+from CFTGNNExplainer.sampling.embedding import StaticEmbedding
 from CFTGNNExplainer.baseline.ttgnbridge import TTGNBridge
 from CFTGNNExplainer.baseline.ttgnwrapper import TTGNWrapper
 from CFTGNNExplainer.baseline.pgexplainer import TPGExplainer

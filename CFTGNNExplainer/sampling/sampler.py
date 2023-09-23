@@ -1,9 +1,10 @@
 from typing import List
 
+import torch.nn as nn
 import numpy as np
 import pandas as pd
 from CFTGNNExplainer.constants import COL_ID, COL_SUBGRAPH_DISTANCE, COL_TIMESTAMP
-
+from CFTGNNExplainer.sampling.embedding import Embedding
 
 def filter_subgraph(base_event_id: int, excluded_events: np.ndarray, subgraph: pd.DataFrame,
                     known_cf_examples: List[np.ndarray] | None = None) -> pd.DataFrame:
@@ -65,6 +66,8 @@ class ClosestEdgeSampler(EdgeSampler):
 
 class PretrainedEdgeSampler(EdgeSampler):
 
+    def __init__(self, subgraph: pd.DataFrame, prediction_model: nn.Module, embedding: Embedding):
+        pass
     def sample(self, base_event_id: int, excluded_events: np.ndarray, size: int,
                known_cf_examples: List[np.ndarray] | None = None) -> np.ndarray:
         # TODO: Sample events based on scoring by pretrained model

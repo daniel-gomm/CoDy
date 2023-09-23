@@ -9,7 +9,7 @@ from CFTGNNExplainer.connector.bridge import TGNNBridge
 from CFTGNNExplainer.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample
 from CFTGNNExplainer.explainer.greedy import GreedyCFExplainer, is_prediction_most_shifted
-from CFTGNNExplainer.explainer.sampler import EdgeSampler
+from CFTGNNExplainer.sampling.sampler import EdgeSampler
 from CFTGNNExplainer.explainer.searching import (TreeNode, select_best_cf_example, find_best_non_counterfactual_example,
                                                  SearchingCFExplainer)
 

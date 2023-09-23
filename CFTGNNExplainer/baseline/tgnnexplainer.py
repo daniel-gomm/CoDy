@@ -11,10 +11,10 @@ import torch
 from pandas import DataFrame
 from tqdm import tqdm
 
-from CFTGNNExplainer.baseline.embedding import Embedding
-from CFTGNNExplainer.baseline.pgexplainer import TPGExplainer, FactualExplanation
+from CFTGNNExplainer.sampling.embedding import Embedding
+from CFTGNNExplainer.baseline.pgexplainer import TPGExplainer
 from CFTGNNExplainer.baseline.ttgnbridge import TTGNBridge
-from CFTGNNExplainer.constants import COL_TIMESTAMP, COL_NODE_U, COL_NODE_I, COL_STATE, COL_ID
+from CFTGNNExplainer.constants import COL_TIMESTAMP, COL_NODE_U, COL_NODE_I, COL_ID
 from CFTGNNExplainer.explainer.base import Explainer
 from TTGN.model.tgn import TGN
 

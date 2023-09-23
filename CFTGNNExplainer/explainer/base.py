@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from CFTGNNExplainer.connector.bridge import TGNNBridge
 from CFTGNNExplainer.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from CFTGNNExplainer.data.subgraph import SubgraphGenerator
-from CFTGNNExplainer.explainer.sampler import EdgeSampler, RandomEdgeSampler, RecentEdgeSampler, ClosestEdgeSampler
+from CFTGNNExplainer.sampling.sampler import EdgeSampler, RandomEdgeSampler, RecentEdgeSampler, ClosestEdgeSampler
 
 
 @dataclass
@@ -58,8 +58,8 @@ class Explainer:
 
     def _create_sampler(self, subgraph: pd.DataFrame) -> EdgeSampler:
         """
-        Create sampler according to 
-        @type subgraph: DataFrame The subgraph on which to create the sampler
+        Create sampling according to
+        @type subgraph: DataFrame The subgraph on which to create the sampling
         """
         if self.sampling_strategy == 'random':
             return RandomEdgeSampler(subgraph)
@@ -68,7 +68,7 @@ class Explainer:
         elif self.sampling_strategy == 'closest':
             return ClosestEdgeSampler(subgraph)
         else:
-            raise NotImplementedError(f'No sampler implemented for sampling strategy {self.sampling_strategy}')
+            raise NotImplementedError(f'No sampling implemented for sampling strategy {self.sampling_strategy}')
 
     def calculate_original_score(self, explained_event_id: int, min_event_id: int) -> float:
         """
