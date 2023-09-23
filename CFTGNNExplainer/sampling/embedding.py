@@ -8,7 +8,7 @@ from CFTGNNExplainer.data.dataset import ContinuousTimeDynamicGraphDataset
 class Embedding:
     dimension: int
 
-    def get_embedding(self, event_ids: np.ndarray, explained_event_id: int, explanation_mode: bool = True):
+    def get_embedding(self, event_ids: np.ndarray, explained_event_id: int):
         raise NotImplementedError
 
 
@@ -22,7 +22,7 @@ class StaticEmbedding(Embedding):
         edge_features = self.dataset.edge_features.shape[1]
         self.dimension = (2 * node_features + edge_features + time_embedding_dimension) * 2
 
-    def get_embedding(self, event_ids: np.ndarray, explained_event_id: int, explanation_mode: bool = True):
+    def get_embedding(self, event_ids: np.ndarray, explained_event_id: int):
         all_event_ids = np.concatenate([event_ids, np.array([explained_event_id])])
         edge_mask = np.isin(self.dataset.edge_ids, all_event_ids)
         involved_source_nodes = self.dataset.source_node_ids[edge_mask]
@@ -61,7 +61,7 @@ class DynamicEmbedding(Embedding):
         else:
             self.dimension = (2 * node_embedding_dimension + edge_features + time_embedding_dimension) * 2
 
-    def get_embedding(self, event_ids: np.ndarray, explained_event_id: int, explanation_mode: bool = True):
+    def get_embedding(self, event_ids: np.ndarray, explained_event_id: int):
         self.model.activate_evaluation_mode()
         all_event_ids = np.concatenate([event_ids, np.array([explained_event_id])])
         edge_mask = np.isin(self.dataset.edge_ids, all_event_ids)
