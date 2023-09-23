@@ -110,7 +110,7 @@ class TPGExplainer(Explainer):
             if generate_event_ids:
                 train_event_ids = self.tgnn_bridge.model.dataset.extract_random_event_ids('train')
 
-            print(f'Starting training epoch {epoch}')
+            self.logger.info(f'Starting training epoch {epoch}')
             optimizer.zero_grad()
             loss = torch.tensor([0], dtype=torch.float32, device=self.device)
             loss_list = []
@@ -152,14 +152,14 @@ class TPGExplainer(Explainer):
 
             progress_bar.close()
 
-            print(
+            self.logger.info(
                 f'Finished epoch {epoch} with mean loss of {np.mean(loss_list)}, median loss of {np.median(loss_list)},'
                 f' loss variance {np.var(loss_list)} and {skipped_events} skipped events')
 
             checkpoint_path = f'{save_directory}/{model_name}_checkpt_e{epoch}.pth'
             self._save_explainer(checkpoint_path)
-            print(f"Saved checkpoint to {checkpoint_path}")
+            self.logger.info(f"Saved checkpoint to {checkpoint_path}")
 
         model_path = f'{save_directory}/{model_name}_final.pth'
         self._save_explainer(model_path)
-        print(f'Finished training, saved explainer checkpoint at {model_path}')
+        self.logger.info(f'Finished training, saved explainer checkpoint at {model_path}')
