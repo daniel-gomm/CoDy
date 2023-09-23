@@ -11,12 +11,12 @@ import torch.optim
 
 from CFTGNNExplainer.utils import ProgressBar
 
-TRAIN_START_MEMORY_LABEL = 'train-start'
-TRAIN_END_MEMORY_LABEL = 'train-end'
 
 
 @dataclass
 class FactualExplanation:
+    explained_event_id: int
+    original_score: float
     event_ids: np.ndarray
     event_importances: np.ndarray
 
@@ -159,8 +159,6 @@ class TPGExplainer(Explainer):
             checkpoint_path = f'{save_directory}/{model_name}_checkpt_e{epoch}.pth'
             self._save_explainer(checkpoint_path)
             print(f"Saved checkpoint to {checkpoint_path}")
-
-        self.tgnn_bridge.initialize(train_end_id, show_progress=False, memory_label=TRAIN_END_MEMORY_LABEL)
 
         model_path = f'{save_directory}/{model_name}_final.pth'
         self._save_explainer(model_path)

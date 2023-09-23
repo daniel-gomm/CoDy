@@ -13,6 +13,7 @@ from CFTGNNExplainer.explainer.sampler import EdgeSampler, RandomEdgeSampler, Re
 
 @dataclass
 class CounterFactualExample:
+    explained_event_id: int
     original_prediction: float
     counterfactual_prediction: float
     achieves_counterfactual_explanation: bool
