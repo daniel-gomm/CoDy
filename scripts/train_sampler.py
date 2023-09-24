@@ -33,7 +33,6 @@ def train_epoch(explainer: EvaluationExplainer, emb: Embedding, model: nn.Module
 
     progress_bar = ProgressBar(max_item=len(epoch_event_ids))
     for index, event_id in enumerate(sorted(epoch_event_ids)):
-
         sampler = explainer.initialize_explanation_evaluation(event_id)
 
         if len(sampler.subgraph) == 0:
@@ -44,13 +43,13 @@ def train_epoch(explainer: EvaluationExplainer, emb: Embedding, model: nn.Module
         removed_events = []
 
         for d in range(depth):
-            sample = sampler.sample(event_id, np.unique(np.array(removed_events)), 5)
+            sample = sampler.sample(event_id, np.unique(np.array(removed_events)), explainer.sample_size)
+            explainer.tgnn_bridge.reset_model()
             if len(removed_events) == 0:
                 if 0 < last_min_event_id <= min_event_id:
                     explainer.tgnn_bridge.initialize(last_min_event_id, show_progress=False,
                                                      memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
                 explainer.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
-
             explainer.tgnn_bridge.initialize(min_event_id, show_progress=False,
                                              memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
 
@@ -77,7 +76,8 @@ def train_epoch(explainer: EvaluationExplainer, emb: Embedding, model: nn.Module
             explainer.tgnn_bridge.remove_memory_backup(CUR_IT_MIN_EVENT_MEM_LBL)
 
             true_values = np.array(sample_true_prediction_deltas)
-            true_values = torch.tensor(true_values, device=torch.device(device), dtype=torch.float).reshape(5, 1)
+            true_values = (torch.tensor(true_values, device=torch.device(device), dtype=torch.float)
+                           .reshape(len(true_values), 1))
 
             loss = criterion(sample_weights, true_values)
             loss.backward()
@@ -102,6 +102,8 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=5, help='Number of epochs to train the model for.')
     parser.add_argument('--model_save_path', required=True, type=str,
                         help='Path at which to save the model and its checkpoints')
+    parser.add_argument('--resume_path', required=False, default=None, type=str,
+                        help='Path of a pretrained sampler model on which to resume training.')
 
     args = parse_args(parser)
 
@@ -125,6 +127,9 @@ if __name__ == '__main__':
         nn.ReLU(),
         nn.Linear(128, 1)
     )
+    if args.resume_path is not None:
+        prediction_model.load_state_dict(torch.load(args.resume_path))
+
     prediction_model.to(torch.device(tgn_wrapper.device))
 
     adam_optimizer = torch.optim.Adam(prediction_model.parameters(), lr=1e-4)
