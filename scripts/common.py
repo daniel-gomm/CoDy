@@ -42,7 +42,7 @@ def add_model_training_arguments(parser: ArgumentParser):
 def create_dataset_from_args(args: Namespace, parameters: TrainTestDatasetParameters | None = None) -> (
         ContinuousTimeDynamicGraphDataset):
     if parameters is None:
-        parameters = TrainTestDatasetParameters(0.2, 0.4, 0.8, 1000, 500, 500)
+        parameters = TrainTestDatasetParameters(0.2, 0.6, 0.8, 1000, 500, 500)
 
     # Get dataset
     dataset_folder = args.dataset
@@ -56,7 +56,6 @@ def create_dataset_from_args(args: Namespace, parameters: TrainTestDatasetParame
     assert name == edge_features[0][:-18] == events[0][:-9]
 
     name = name.split('/')[-1]
-    print(name)
     all_event_data = pd.read_csv(events[0])
     edge_features = np.load(edge_features[0])
     node_features = np.load(node_features[0])
