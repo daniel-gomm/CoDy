@@ -9,7 +9,7 @@ from CFTGNNExplainer.connector.bridge import TGNNBridge
 from CFTGNNExplainer.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample
 from CFTGNNExplainer.explainer.greedy import GreedyCFExplainer, is_prediction_most_shifted
-from CFTGNNExplainer.sampling.sampler import EdgeSampler
+from CFTGNNExplainer.sampling.sampler import EdgeSampler, PretrainedEdgeSamplerParameters
 from CFTGNNExplainer.explainer.searching import (TreeNode, select_best_cf_example, find_best_non_counterfactual_example,
                                                  SearchingCFExplainer)
 
@@ -55,12 +55,12 @@ class EvaluationExplainer(Explainer):
         del self.tgnn_bridge.memory_backups_map[NEW_PREDICTION_MEMORY_LABEL]
         return original_prediction.detach().cpu().item()
 
-    def initialize_explanation_evaluation(self, explained_event_id: int) -> EdgeSampler:
+    def initialize_explanation_evaluation(self, explained_event_id: int, original_prediction: float) -> EdgeSampler:
         subgraph = self.subgraph_generator.get_fixed_size_k_hop_temporal_subgraph(num_hops=self.num_hops,
                                                                                   base_event_id=explained_event_id,
                                                                                   size=self.candidates_size)
         self.tgnn_bridge.set_evaluation_mode(True)
-        return self._create_sampler(subgraph)
+        return self._create_sampler(subgraph, explained_event_id, original_prediction=original_prediction)
 
     def evaluate_explanation(self, explained_event_id: int, original_prediction: float) -> (
             EvaluationCounterFactualExample):
@@ -76,13 +76,16 @@ class EvaluationExplainer(Explainer):
 class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
 
     def __init__(self, tgnn_bridge: TGNNBridge, sampling_strategy: str = 'recent', sample_size: int = 10,
-                 candidates_size: int = 75, verbose: bool = False):
+                 candidates_size: int = 75, verbose: bool = False,
+                 pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
         super(GreedyCFExplainer, self).__init__(tgnn_bridge=tgnn_bridge, sampling_strategy=sampling_strategy,
                                                 sample_size=sample_size, candidates_size=candidates_size,
-                                                verbose=verbose)
+                                                verbose=verbose,
+                                                pretrained_sampler_parameters=pretrained_sampler_parameters)
         super(EvaluationExplainer, self).__init__(tgnn_bridge=tgnn_bridge, sampling_strategy=sampling_strategy,
                                                   candidates_size=candidates_size, sample_size=sample_size,
-                                                  verbose=verbose)
+                                                  verbose=verbose,
+                                                  pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.last_min_id = 0
 
     def evaluate_explanation(self, explained_event_id: int,
@@ -90,7 +93,7 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
         timings = {}
         statistics = {}
         start_time = time.time_ns()
-        sampler = self.initialize_explanation_evaluation(explained_event_id)
+        sampler = self.initialize_explanation_evaluation(explained_event_id, original_prediction)
         min_event_id = sampler.subgraph[COL_ID].min() - 1
         if 0 < self.last_min_id <= min_event_id:
             self.tgnn_bridge.initialize(self.last_min_id, show_progress=False,
@@ -231,7 +234,7 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
         timings = {}
         statistics = {}
         start_time = time.time_ns()
-        sampler = self.initialize_explanation_evaluation(explained_event_id)
+        sampler = self.initialize_explanation_evaluation(explained_event_id, original_prediction)
         min_event_id = sampler.subgraph[COL_ID].min() - 1
         if 0 < self.last_min_id <= min_event_id:
             self.tgnn_bridge.initialize(self.last_min_id, show_progress=False,

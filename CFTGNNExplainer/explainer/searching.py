@@ -7,7 +7,7 @@ import numpy as np
 
 from CFTGNNExplainer.connector.bridge import TGNNBridge
 from CFTGNNExplainer.explainer.base import Explainer, calculate_prediction_delta, CounterFactualExample
-from CFTGNNExplainer.sampling.sampler import EdgeSampler
+from CFTGNNExplainer.sampling.sampler import EdgeSampler, PretrainedEdgeSamplerParameters
 from CFTGNNExplainer.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 
 
@@ -163,9 +163,10 @@ class TreeNode:
 class SearchingCFExplainer(Explainer):
 
     def __init__(self, tgnn_bridge: TGNNBridge, candidates_size: int = 75, sample_size: int = 10,
-                 sampling_strategy: str = 'recent', max_steps: int = 50, verbose: bool = False):
+                 sampling_strategy: str = 'recent', max_steps: int = 50, verbose: bool = False,
+                 pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
         super().__init__(tgnn_bridge, sampling_strategy, candidates_size=candidates_size, sample_size=sample_size,
-                         verbose=verbose)
+                         verbose=verbose, pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.max_steps = max_steps
 
     def expand_node(self, explained_edge_id: int, node_to_expand: TreeNode, sampler: EdgeSampler,

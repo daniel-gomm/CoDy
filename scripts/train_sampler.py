@@ -33,7 +33,7 @@ def train_epoch(explainer: EvaluationExplainer, emb: Embedding, model: nn.Module
 
     progress_bar = ProgressBar(max_item=len(epoch_event_ids), prefix='Training on events')
     for index, event_id in enumerate(sorted(epoch_event_ids)):
-        sampler = explainer.initialize_explanation_evaluation(event_id)
+        sampler = explainer.initialize_explanation_evaluation(event_id, original_prediction=0.0)
 
         if len(sampler.subgraph) == 0:
             continue
