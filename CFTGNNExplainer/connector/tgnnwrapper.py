@@ -97,6 +97,7 @@ class TGNWrapper(TGNNWrapper):
         self.batch_size = batch_size
         if checkpoint_path is not None:
             self.model.load_state_dict(torch.load(checkpoint_path))
+        self.model.to(torch.device(device))
         self.node_embedding_dimension = self.model.embedding_module.embedding_dimension
         self.time_embedding_dimension = self.model.time_encoder.dimension
 
