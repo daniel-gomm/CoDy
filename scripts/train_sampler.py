@@ -31,7 +31,7 @@ def train_epoch(explainer: EvaluationExplainer, emb: Embedding, model: nn.Module
     losses = []
     last_min_event_id = 0
 
-    progress_bar = ProgressBar(max_item=len(epoch_event_ids))
+    progress_bar = ProgressBar(max_item=len(epoch_event_ids), prefix='Training on events')
     for index, event_id in enumerate(sorted(epoch_event_ids)):
         sampler = explainer.initialize_explanation_evaluation(event_id)
 
@@ -64,6 +64,7 @@ def train_epoch(explainer: EvaluationExplainer, emb: Embedding, model: nn.Module
                                              memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
 
             sample_true_prediction_deltas = []
+            progress_bar.add_inner_progress(len(sample), f'Processing sample for event {event_id}')
             for sample_edge_id in sample:
                 subgraph_prediction = explainer.calculate_subgraph_prediction(sample,
                                                                               np.unique(removed_events).tolist(),
@@ -72,6 +73,8 @@ def train_epoch(explainer: EvaluationExplainer, emb: Embedding, model: nn.Module
                                                                               memory_label=CUR_IT_MIN_EVENT_MEM_LBL)
                 sample_true_prediction_deltas.append(calculate_prediction_delta(curr_d_prediction,
                                                                                 subgraph_prediction))
+                progress_bar.inner_next()
+            progress_bar.inner_close()
 
             explainer.tgnn_bridge.remove_memory_backup(CUR_IT_MIN_EVENT_MEM_LBL)
 
