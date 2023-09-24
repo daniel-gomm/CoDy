@@ -7,6 +7,7 @@ import numpy as np
 
 from typing import List
 
+from CFTGNNExplainer.sampling.sampler import load_prediction_model
 from common import (create_dataset_from_args, create_tgn_wrapper_from_args, add_dataset_arguments,
                     add_wrapper_model_arguments, parse_args)
 
@@ -124,16 +125,7 @@ if __name__ == '__main__':
     else:
         embedding_type = 'static'
         embedding = StaticEmbedding(dataset, tgn_wrapper)
-
-    prediction_model = nn.Sequential(
-        nn.Linear(embedding.dimension, 128),
-        nn.ReLU(),
-        nn.Linear(128, 1)
-    )
-    if args.resume_path is not None:
-        prediction_model.load_state_dict(torch.load(args.resume_path))
-
-    prediction_model.to(torch.device(tgn_wrapper.device))
+    prediction_model = load_prediction_model(embedding.dimension, args.resume_path, tgn_wrapper.device)
 
     adam_optimizer = torch.optim.Adam(prediction_model.parameters(), lr=1e-4)
 
