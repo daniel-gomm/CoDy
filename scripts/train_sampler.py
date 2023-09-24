@@ -105,8 +105,7 @@ if __name__ == '__main__':
 
     args = parse_args(parser)
 
-    dataset = create_dataset_from_args(args, TrainTestDatasetParameters(0.2, 0.6, 0.8, 100, 1000,
-                                                                        500))  # TODO: Adjust parameters
+    dataset = create_dataset_from_args(args, TrainTestDatasetParameters(0.2, 0.6, 0.8, 100, 1000, 500))
 
     tgn_wrapper = create_tgn_wrapper_from_args(args, dataset)
 
