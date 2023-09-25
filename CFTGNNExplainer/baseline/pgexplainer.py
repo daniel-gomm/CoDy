@@ -14,11 +14,26 @@ import torch.optim
 from CFTGNNExplainer.utils import ProgressBar
 
 
+def fidelity(original_prediction, important_prediction):
+    if original_prediction >= 0: # logit
+        return important_prediction - original_prediction
+    return original_prediction - important_prediction
+
+def greedy_highest_value_over_array(values):
+    best_values = [values[0], ]
+    best = values[0]
+    for i in range(1, len(values)):
+        if best < values[i]:
+            best = values[i]
+        best_values.append(best)
+    return np.array(best_values)
+
 @dataclass
 class FactualExplanation:
     explained_event_id: int
     event_ids: np.ndarray
     event_importances: np.ndarray
+    original_score: float
     timings: Dict
     statistics: Dict
 
@@ -35,7 +50,8 @@ class FactualExplanation:
         results = {
             'explained_event_id': self.explained_event_id,
             'event_ids': self.event_ids.tolist(),
-            'results': self.event_importances.tolist()
+            'event_importances': self.event_importances.tolist(),
+            'original_score': self.original_score
         }
         results.update(self.statistics)
         results.update(self.timings)
@@ -67,6 +83,7 @@ class TPGExplainer(Explainer):
         start_time = time.time_ns()
         self.tgnn_bridge.reset_model()
         self.explainer.eval()
+        self.tgnn_bridge.initialize(explained_event_id)
         init_end_time = time.time_ns()
         with torch.no_grad():
             candidate_events = self.tgnn_bridge.get_candidate_events(explained_event_id)
@@ -87,9 +104,31 @@ class TPGExplainer(Explainer):
         statistics = {
             'oracle_calls': 0,
             'candidate_size': len(candidate_events),
-            'candidates': candidate_events
+            'candidates': candidate_events.tolist()
         }
-        return FactualExplanation(explained_event_id, candidate_events, edge_weights, timings, statistics)
+        return FactualExplanation(explained_event_id, candidate_events, edge_weights,
+                                  self.tgnn_bridge.original_score.detach().cpu().item(), timings, statistics)
+
+    def evaluate_fidelity(self, explanation: FactualExplanation):
+        candidates = explanation.event_ids
+        candidate_weights = explanation.event_importances
+
+        candidate_num = len(candidates)
+
+        fidelity_list = []
+        sparsity_list = np.arange(0, 1.05, 0.05)
+        for sparsity in sparsity_list:
+            sparsity_cutoff = int(sparsity * candidate_num)
+            important_events = candidates[:sparsity_cutoff + 1]
+            b_i_events = self.tgnn_bridge.base_events + important_events.tolist()
+            prediction, _ = self.tgnn_bridge.predict(explanation.explained_event_id, edge_id_preserve_list=b_i_events)
+            prediction = prediction.detach().cpu().item()
+            fid = fidelity(explanation.original_score, prediction)
+            fidelity_list.append(fid)
+
+        fidelity_best = greedy_highest_value_over_array(fidelity_list)
+        return sparsity_list.tolist(), fidelity_list, fidelity_best.tolist()
+
 
     @staticmethod
     def _loss(masked_probability, original_probability):
