@@ -27,7 +27,7 @@ class TTGNBridge(TGNNBridge):
         self.model.reset_model()
         return self.model.initialize(event_id, self.explanation_candidates_size)
 
-    def predict(self, event_id: int, candidate_event_ids=None, edge_weights=None):
+    def predict(self, event_id: int, candidate_event_ids=None, edge_weights=None, edge_id_preserve_list=None):
         source_node, target_node, timestamp, edge_id = self.model.extract_event_information(event_id)
         return self.model.compute_edge_probabilities(source_nodes=source_node,
                                                      target_nodes=target_node,
@@ -36,7 +36,8 @@ class TTGNBridge(TGNNBridge):
                                                      perform_memory_update=False,
                                                      candidate_event_ids=candidate_event_ids,
                                                      candidate_event_weights=edge_weights,
-                                                     result_as_logit=True)
+                                                     result_as_logit=True,
+                                                     edge_idx_preserve_list=edge_id_preserve_list)
 
     def get_candidate_events(self, event_id: int):
         assert event_id == self.last_predicted_event_id, (f'Last event predicted {self.last_predicted_event_id} does '
