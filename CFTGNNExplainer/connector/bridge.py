@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 
 from CFTGNNExplainer.connector.tgnnwrapper import TGNNWrapper
@@ -12,6 +14,8 @@ class TGNNBridge:
     def __init__(self, model: TGNNWrapper):
         self.model = model
         self.memory_backups_map = {}
+        logging.basicConfig(level=logging.INFO)
+        self.logger = logging.getLogger('TGNNBridge')
 
     def initialize(self, event_id: int, show_progress: bool = False, memory_label: str = None):
         raise NotImplementedError
@@ -48,9 +52,14 @@ class DynamicTGNNBridge(TGNNBridge):
             if show_progress:
                 print(f'Restoring memory with label "{memory_label}"')
             memory_backup, backup_event_id = self.memory_backups_map[memory_label]
-            assert backup_event_id == event_id, 'The provided event id does not match the event id of the backup'
-            self.model.restore_memory(memory_backup, event_id)
-            return
+            if backup_event_id == event_id:
+                self.model.restore_memory(memory_backup, event_id)
+                return
+            else:  # This should not happen. If this happens causes the model to reprocess everything from the beginning
+                self.logger.warning('The provided event ID does not match the event id of the backup. '
+                                    'Recreating the state by processing from the beginning.')
+                self.reset_model()
+
         progress_bar = None
         if show_progress:
             progress_bar = ProgressBar(0, prefix='Rolling out events')
