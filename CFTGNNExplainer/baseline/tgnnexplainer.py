@@ -11,10 +11,10 @@ import torch
 from pandas import DataFrame
 from tqdm import tqdm
 
-from CFTGNNExplainer.baseline.embedding import Embedding
-from CFTGNNExplainer.baseline.pgexplainer import TPGExplainer, FactualExplanation
+from CFTGNNExplainer.sampling.embedding import Embedding
+from CFTGNNExplainer.baseline.pgexplainer import TPGExplainer
 from CFTGNNExplainer.baseline.ttgnbridge import TTGNBridge
-from CFTGNNExplainer.constants import COL_TIMESTAMP, COL_NODE_U, COL_NODE_I, COL_STATE, COL_ID
+from CFTGNNExplainer.constants import COL_TIMESTAMP, COL_NODE_U, COL_NODE_I, COL_ID
 from CFTGNNExplainer.explainer.base import Explainer
 from TTGN.model.tgn import TGN
 
@@ -373,7 +373,7 @@ class TGNNExplainer(Explainer):
     def _get_candidate_weights(self, event_idx):
         candidate_events = self.tgnn_bridge.candidate_events
         self.pg_explainer.explainer.eval()
-        edge_weights = self.pg_explainer.get_event_scores(event_idx, candidate_events, False)
+        edge_weights = self.pg_explainer.get_event_scores(event_idx, candidate_events)
 
         candidate_weights_dict = {
             'candidate_events': torch.tensor(candidate_events, dtype=torch.int64, device=self.device),

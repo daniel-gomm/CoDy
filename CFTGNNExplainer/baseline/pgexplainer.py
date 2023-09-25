@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from CFTGNNExplainer.baseline.embedding import Embedding
+from CFTGNNExplainer.sampling.embedding import Embedding
 from CFTGNNExplainer.baseline.ttgnbridge import TTGNBridge
 from CFTGNNExplainer.explainer.base import Explainer
 
@@ -61,7 +61,7 @@ class TPGExplainer(Explainer):
             candidate_events = self.tgnn_bridge.get_candidate_events(explained_event_id)
             if len(candidate_events):
                 return FactualExplanation(np.ndarray([]), np.ndarray([]))
-            edge_weights = self.get_event_scores(explained_event_id, candidate_events, False)
+            edge_weights = self.get_event_scores(explained_event_id, candidate_events)
             edge_weights = edge_weights.cpu().detach().numpy().flatten()
             sorted_indices = np.argsort(edge_weights)[::-1]  # declining
             edge_weights = edge_weights[sorted_indices]
@@ -90,10 +90,9 @@ class TPGExplainer(Explainer):
         state_dict = self.explainer.state_dict()
         torch.save(state_dict, path)
 
-    def get_event_scores(self, explained_event_id, candidate_event_ids, training_mode):
+    def get_event_scores(self, explained_event_id, candidate_event_ids):
         self.tgnn_bridge.initialize(explained_event_id)
-        edge_embeddings = self.embedding.get_embedding(candidate_event_ids, explained_event_id,
-                                                       explanation_mode=not training_mode)
+        edge_embeddings = self.embedding.get_embedding(candidate_event_ids, explained_event_id)
         return self.explainer(edge_embeddings)
 
     def train(self, epochs: int, learning_rate: float, batch_size: int, model_name: str, save_directory: str,
@@ -110,7 +109,7 @@ class TPGExplainer(Explainer):
             if generate_event_ids:
                 train_event_ids = self.tgnn_bridge.model.dataset.extract_random_event_ids('train')
 
-            print(f'Starting training epoch {epoch}')
+            self.logger.info(f'Starting training epoch {epoch}')
             optimizer.zero_grad()
             loss = torch.tensor([0], dtype=torch.float32, device=self.device)
             loss_list = []
@@ -127,7 +126,7 @@ class TPGExplainer(Explainer):
                 if len(candidate_events) == 0:
                     skipped_events += 1
                     continue
-                edge_weights = self.get_event_scores(event_id, candidate_events, training_mode=True)
+                edge_weights = self.get_event_scores(event_id, candidate_events)
 
                 prob_original_pos, prob_original_neg = self.tgnn_bridge.predict(event_id)
                 prob_masked_pos, prob_masked_neg = self.tgnn_bridge.predict(event_id, candidate_events, edge_weights)
@@ -152,14 +151,14 @@ class TPGExplainer(Explainer):
 
             progress_bar.close()
 
-            print(
+            self.logger.info(
                 f'Finished epoch {epoch} with mean loss of {np.mean(loss_list)}, median loss of {np.median(loss_list)},'
                 f' loss variance {np.var(loss_list)} and {skipped_events} skipped events')
 
             checkpoint_path = f'{save_directory}/{model_name}_checkpt_e{epoch}.pth'
             self._save_explainer(checkpoint_path)
-            print(f"Saved checkpoint to {checkpoint_path}")
+            self.logger.info(f"Saved checkpoint to {checkpoint_path}")
 
         model_path = f'{save_directory}/{model_name}_final.pth'
         self._save_explainer(model_path)
-        print(f'Finished training, saved explainer checkpoint at {model_path}')
+        self.logger.info(f'Finished training, saved explainer checkpoint at {model_path}')

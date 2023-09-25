@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from CFTGNNExplainer.connector.bridge import TGNNBridge
 from CFTGNNExplainer.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from CFTGNNExplainer.data.subgraph import SubgraphGenerator
-from CFTGNNExplainer.explainer.sampler import EdgeSampler, RandomEdgeSampler, RecentEdgeSampler, ClosestEdgeSampler
+from CFTGNNExplainer.sampling.sampler import EdgeSampler, RandomEdgeSampler, RecentEdgeSampler, ClosestEdgeSampler, \
+    PretrainedEdgeSampler, PretrainedEdgeSamplerParameters
 
 
 @dataclass
@@ -44,7 +45,8 @@ def calculate_prediction_delta(original_prediction: float, prediction_to_assess:
 class Explainer:
 
     def __init__(self, tgnn_bridge: TGNNBridge, sampling_strategy: str = 'recent', candidates_size: int = 75,
-                 sample_size: int = 10, verbose: bool = False):
+                 sample_size: int = 10, verbose: bool = False,
+                 pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
         self.tgnn_bridge = tgnn_bridge
         self.dataset = self.tgnn_bridge.model.dataset
         self.subgraph_generator = SubgraphGenerator(self.dataset)
@@ -55,11 +57,13 @@ class Explainer:
         self.candidates_size = candidates_size
         self.sample_size = sample_size
         self.verbose = verbose
+        self.pretrained_sampler_parameters = pretrained_sampler_parameters
 
-    def _create_sampler(self, subgraph: pd.DataFrame) -> EdgeSampler:
+    def _create_sampler(self, subgraph: pd.DataFrame, explained_event_id: int,
+                        original_prediction: float) -> EdgeSampler:
         """
-        Create sampler according to 
-        @type subgraph: DataFrame The subgraph on which to create the sampler
+        Create sampling according to
+        @type subgraph: DataFrame The subgraph on which to create the sampling
         """
         if self.sampling_strategy == 'random':
             return RandomEdgeSampler(subgraph)
@@ -67,8 +71,12 @@ class Explainer:
             return RecentEdgeSampler(subgraph)
         elif self.sampling_strategy == 'closest':
             return ClosestEdgeSampler(subgraph)
+        elif self.sampling_strategy == 'pretrained':
+            assert self.pretrained_sampler_parameters is not None
+            return PretrainedEdgeSampler(subgraph, self.pretrained_sampler_parameters, explained_event_id,
+                                         original_prediction)
         else:
-            raise NotImplementedError(f'No sampler implemented for sampling strategy {self.sampling_strategy}')
+            raise NotImplementedError(f'No sampling implemented for sampling strategy {self.sampling_strategy}')
 
     def calculate_original_score(self, explained_event_id: int, min_event_id: int) -> float:
         """
@@ -100,7 +108,7 @@ class Explainer:
         self.tgnn_bridge.set_evaluation_mode(True)
         self.tgnn_bridge.reset_model()
         original_prediction = self.calculate_original_score(explained_event_id, min_event_id)
-        return original_prediction, self._create_sampler(subgraph)
+        return original_prediction, self._create_sampler(subgraph, explained_event_id, original_prediction)
 
     def calculate_subgraph_prediction(self, candidate_events: np.ndarray, cf_example_events: List[int],
                                       explained_event_id: int, candidate_event_id: int,
