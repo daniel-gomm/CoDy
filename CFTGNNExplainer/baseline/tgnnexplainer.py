@@ -65,25 +65,6 @@ def _agg_attention(model: TGN):
     return e_idx_weight_dict
 
 
-def to_networkx_tg(events: DataFrame):
-    base = events[COL_NODE_U].max() + 1
-    g = nx.MultiGraph()
-    g.add_nodes_from(events[COL_NODE_U])
-    g.add_nodes_from(events[COL_NODE_I] + base)
-    t_edges = []
-    for i in range(len(events)):
-        user, item, t, e_idx = events[COL_NODE_U][i], events[COL_NODE_I][i], events[COL_TIMESTAMP][i], events.index[i]
-        t_edges.append((user, item, {'t': t, 'e_idx': i},))
-    g.add_edges_from(t_edges)
-    return g
-
-
-def print_nodes(tree_nodes):
-    print('\nSearched tree nodes (preserved edge idxs in candidates):')
-    for i, node in enumerate(tree_nodes):
-        print(i, sorted(node.coalition), ': ', node.P)
-
-
 def find_best_node_result(all_nodes, min_atoms=6):
     """ return the highest reward tree_node with its subgraph is smaller than max_nodes """
     all_nodes = filter(lambda x: len(x.coalition) <= min_atoms, all_nodes)  # filter using the min_atoms
@@ -108,7 +89,6 @@ class MCTSNode(object):
         return self.W / self.N if self.N > 0 else 0
 
     def u(self, n):
-        # return self.c_puct * self.P * math.sqrt(n) / (1 + self.N)
         return self.c_puct * math.sqrt(n) / (1 + self.N)
 
     @property
@@ -150,16 +130,6 @@ def compute_scores(tgn_model: TTGNBridge, base_events, children, target_event_id
             score = child.P
         results.append(score)
     return results, oracle_call_time
-
-
-def base_and_important_events(base_events, candidate_events, coalition):
-    return base_events + coalition
-
-
-def base_and_unimportant_events(base_events, candidate_events, coalition):
-    important_ = set(coalition)
-    unimportant_events = list(filter(lambda x: x not in important_, candidate_events))
-    return base_events + unimportant_events
 
 
 class MCTS(object):
