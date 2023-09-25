@@ -10,7 +10,7 @@ import torch
 from pandas import DataFrame
 
 from CFTGNNExplainer.sampling.embedding import Embedding
-from CFTGNNExplainer.baseline.pgexplainer import TPGExplainer
+from CFTGNNExplainer.baseline.pgexplainer import TPGExplainer, greedy_highest_value_over_array
 from CFTGNNExplainer.baseline.ttgnbridge import TTGNBridge
 from CFTGNNExplainer.constants import COL_TIMESTAMP, COL_NODE_U, COL_NODE_I, COL_ID
 from CFTGNNExplainer.explainer.base import Explainer
@@ -20,27 +20,6 @@ from TTGN.model.tgn import TGN
 
 # Reimplementation of T-GNNExplainer by Xia et al. https://openreview.net/forum?id=BR_ZhvcYbGJ most of the code is
 #  directly copied from the original implementation, alongside the TTGN (T-GNNExplainer TGN) version of the TGN model
-
-@dataclass
-class TGNNExplainerExplanation:
-    explained_event_id: int
-    original_prediction: float
-    best_prediction: float
-    results: List[Dict]
-    timings: Dict
-    statistics: Dict
-
-    def to_dict(self) -> Dict:
-        results = {
-            'explained_event_id': self.explained_event_id,
-            'original_prediction': self.original_prediction,
-            'best_prediction': self.best_prediction,
-            'results': self.results
-        }
-        results.update(self.statistics)
-        results.update(self.timings)
-        return results
-
 
 def _agg_attention(model: TGN):
     attention_weights_list = model.embedding_module.atten_weights_list
@@ -313,6 +292,28 @@ class MCTS(object):
         return "_".join(map(lambda x: str(x), sorted(coalition)))  # NOTE: have sorted
 
 
+@dataclass
+class TGNNExplainerExplanation:
+    explained_event_id: int
+    original_prediction: float
+    best_prediction: float
+    results: List[Dict]
+    timings: Dict
+    statistics: Dict
+    tree_nodes: List[MCTSNode]
+
+    def to_dict(self) -> Dict:
+        results = {
+            'explained_event_id': self.explained_event_id,
+            'original_prediction': self.original_prediction,
+            'best_prediction': self.best_prediction,
+            'results': self.results
+        }
+        results.update(self.statistics)
+        results.update(self.timings)
+        return results
+
+
 class TGNNExplainer(Explainer):
 
     def __init__(self, tgnn_bridge: TTGNBridge, embedding: Embedding, pg_explainer_model: TPGExplainer,
@@ -423,7 +424,41 @@ class TGNNExplainer(Explainer):
 
         return TGNNExplainerExplanation(explained_event_id=explained_event_id, original_prediction=original_prediction,
                                         best_prediction=best_prediction, results=results, timings=timings,
-                                        statistics=statistics)
+                                        statistics=statistics, tree_nodes=tree_nodes)
+
+    def evaluate_fidelity(self, explanation: TGNNExplainerExplanation) -> (List, List, List):
+        tree_nodes = explanation.tree_nodes
+        sparsity_list = []
+        fidelity_list = []
+
+        candidate_events = explanation.statistics['candidates']
+        candidate_num = len(candidate_events)
+        for node in tree_nodes:
+            sparsity = len(node.coalition) / candidate_num
+            assert np.isclose(sparsity, node.Sparsity)
+
+            fidelity = node.P
+            fidelity_list.append(fidelity)
+            sparsity_list.append(sparsity)
+
+        sparsity_list = np.array(sparsity_list)
+        fidelity_list = np.array(fidelity_list)
+
+        # sort according to sparsity
+        sort_idx = np.argsort(sparsity_list)  # ascending of sparsity
+        sparsity_list = sparsity_list[sort_idx]
+        fidelity_list = fidelity_list[sort_idx]
+        best_fidelity_list = greedy_highest_value_over_array(fidelity_list)
+
+        sparsity_thresholds = np.arange(0, 1.05, 0.05)
+        indices = []
+        for sparsity in sparsity_thresholds:
+            indices.append(np.where(sparsity_list <= sparsity)[0].max())
+
+        fidelity_list = fidelity_list[indices]
+        best_fidelity_list = best_fidelity_list[indices]
+
+        return sparsity_thresholds.tolist(), fidelity_list.tolist(), best_fidelity_list.tolist()
 
     def _save_mcts_recorder(self, event_idx):
         # save records
