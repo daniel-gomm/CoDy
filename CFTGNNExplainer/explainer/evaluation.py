@@ -181,12 +181,14 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
 class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
 
     def __init__(self, tgnn_bridge: TGNNBridge, sampling_strategy: str = 'recent', max_steps: int = 50,
-                 sample_size: int = 10, candidates_size: int = 75, verbose: bool = False):
+                 sample_size: int = 10, candidates_size: int = 75, verbose: bool = False,
+                 pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
         SearchingCFExplainer.__init__(self, tgnn_bridge=tgnn_bridge, sampling_strategy=sampling_strategy,
                                       sample_size=sample_size, candidates_size=candidates_size, verbose=verbose,
-                                      max_steps=max_steps)
+                                      max_steps=max_steps, pretrained_sampler_parameters=pretrained_sampler_parameters)
         EvaluationExplainer.__init__(self, tgnn_bridge=tgnn_bridge, sampling_strategy=sampling_strategy,
-                                     candidates_size=candidates_size, sample_size=sample_size, verbose=verbose)
+                                     candidates_size=candidates_size, sample_size=sample_size, verbose=verbose,
+                                     pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.last_min_id = 0
 
     def expand_node(self, explained_edge_id: int, node_to_expand: TreeNode, sampler: EdgeSampler,

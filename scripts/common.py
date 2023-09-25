@@ -1,4 +1,5 @@
 import glob
+import logging
 import os
 import sys
 from argparse import Namespace, ArgumentParser
@@ -95,3 +96,14 @@ def create_tgn_wrapper_from_args(args: Namespace, dataset: ContinuousTimeDynamic
 
     return TGNWrapper(tgn, dataset, num_hops=2, model_name=dataset.name, device=device, n_neighbors=20,
                       batch_size=32, checkpoint_path=args.model)
+
+
+def get_event_ids_from_file(event_ids_filepath: str | None, dataset: ContinuousTimeDynamicGraphDataset,
+                            logger: logging.Logger):
+    if os.path.exists(event_ids_filepath):
+        return np.load(event_ids_filepath)
+    else:
+        logger.info('No event ids to explain provided. Generating new ones...')
+        event_ids_to_explain = dataset.extract_random_event_ids(section='validation')
+        event_ids_to_explain = np.array(event_ids_to_explain)
+        np.save(event_ids_filepath, event_ids_to_explain)
