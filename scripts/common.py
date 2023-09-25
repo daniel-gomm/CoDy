@@ -104,6 +104,6 @@ def get_event_ids_from_file(event_ids_filepath: str | None, dataset: ContinuousT
         return np.load(event_ids_filepath)
     else:
         logger.info('No event ids to explain provided. Generating new ones...')
-        event_ids_to_explain = dataset.extract_random_event_ids(section='validation')
+        event_ids_to_explain = dataset.extract_random_event_ids(section='train')
         event_ids_to_explain = np.array(event_ids_to_explain)
         np.save(event_ids_filepath, event_ids_to_explain)
