@@ -94,4 +94,4 @@ def create_tgn_wrapper_from_args(args: Namespace, dataset: ContinuousTimeDynamic
     tgn.to(device)
 
     return TGNWrapper(tgn, dataset, num_hops=2, model_name=dataset.name, device=device, n_neighbors=20,
-                      batch_size=128, checkpoint_path=args.model)
+                      batch_size=32, checkpoint_path=args.model)
