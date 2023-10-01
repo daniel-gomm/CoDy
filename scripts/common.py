@@ -29,7 +29,7 @@ def add_dataset_arguments(parser: ArgumentParser):
 
 
 def add_wrapper_model_arguments(parser: ArgumentParser):
-    parser.add_argument('-m', '--model', required=True, default=None, type=str,
+    parser.add_argument('-m', '--model', default=None, type=str,
                         help='Path to the model checkpoint to use')
     parser.add_argument('--cuda', action='store_true', help='Use cuda for GPU utilization')
 
@@ -37,7 +37,7 @@ def add_wrapper_model_arguments(parser: ArgumentParser):
 def add_model_training_arguments(parser: ArgumentParser):
     parser.add_argument('--model_path', type=str, required=True,
                         help='Path to the directory where the model checkpoints, final model and results are saved to.')
-    parser.add_argument('--epochs', type=int, default=50, help='Number of epochs to train the model for.')
+    parser.add_argument('-e', '--epochs', type=int, default=50, help='Number of epochs to train the model for.')
 
 
 def create_dataset_from_args(args: Namespace, parameters: TrainTestDatasetParameters | None = None) -> (
