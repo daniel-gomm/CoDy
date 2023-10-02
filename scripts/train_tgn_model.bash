@@ -1,15 +1,8 @@
 #!/bin/bash
 
-RED='\033[0;31m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-PARENT_DIR=$(dirname "$SCRIPT_DIR")
 
-PROCESSED_DATA_DIR="$PARENT_DIR/resources/datasets/processed"
-
-DATASET_NAMES=($(find "$PROCESSED_DATA_DIR" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;))
+source "$SCRIPT_DIR/common.bash"
 
 train_tgn() {
   MODEL_PATH="$PARENT_DIR/resources/models/$1"
@@ -34,26 +27,9 @@ Possible values: ${CYAN}[${DATASET_NAMES[*]}]${NC}
 exit 1
 }
 
-test_exists() {
-  match_found=false
-  for element in "${DATASET_NAMES[@]}"; do
-    if [ "$element" = "$1" ]; then
-      match_found=true
-      break
-    fi
-  done
-
-  if [ "$match_found" = true ]; then
-    return
-  else
-    echo -e "${RED}\"$1\" is not the name of a valid dataset!${NC}"
-    show_help
-  fi
-}
-
 if [ $# -eq 0 ]; then
   show_help
 else
-  test_exists "$1"
+  test_exists "$1" "${DATASET_NAMES[@]}"
   train_tgn "$1"
 fi

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-PARENT_DIR=$(dirname "$SCRIPT_DIR")
+source "$SCRIPT_DIR/common.bash"
 
 DATA_DIR="$PARENT_DIR/resources/datasets"
 RAW_DATA_DIR="$DATA_DIR/raw"
