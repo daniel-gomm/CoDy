@@ -19,7 +19,7 @@ train_pg_explainer() {
     echo "Created new directory for the final PGExplainer model and model checkpoints for the $1 dataset at $MODEL_PATH"
   fi
   echo "Training PGExplainer model for the $1 dataset..."
-  python "$SCRIPT_DIR/train_pgexplainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model_path "$MODEL_PATH" --epochs 1 --model $TGN_PATH --candidates_size 30
+  python "$SCRIPT_DIR/train_pgexplainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model_path "$MODEL_PATH" --epochs 100 --model $TGN_PATH --candidates_size 30
 }
 
 
