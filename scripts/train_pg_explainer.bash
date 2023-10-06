@@ -18,7 +18,7 @@ train_pg_explainer() {
 
 show_help() {
   echo -e "
-Train PGExplainer training script
+PGExplainer training script
 
 Usage: bash $SCRIPT_DIR/train_pg_explainer.bash ${RED}DATASET-NAME${NC}
 
