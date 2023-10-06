@@ -88,7 +88,7 @@ if __name__ == '__main__':
             embedding = DynamicEmbedding(dataset, tgn_wrapper, embed_static_node_features=False)
         else:
             embedding = StaticEmbedding(dataset, tgn_wrapper)
-        pretrained_sampler_model = load_prediction_model(embedding.dimension, args.sampler_model_path,
+        pretrained_sampler_model = load_prediction_model(embedding.single_dimension, args.sampler_model_path,
                                                          tgn_wrapper.device)
         sampler_params = PretrainedEdgeSamplerParameters(pretrained_sampler_model, embedding,
                                                          predict_for_each_sample=args.predict_for_each_sample)

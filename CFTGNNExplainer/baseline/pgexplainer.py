@@ -15,9 +15,10 @@ from CFTGNNExplainer.utils import ProgressBar
 
 
 def fidelity(original_prediction, important_prediction):
-    if original_prediction >= 0: # logit
+    if original_prediction >= 0:  # logit
         return important_prediction - original_prediction
     return original_prediction - important_prediction
+
 
 def greedy_highest_value_over_array(values):
     best_values = [values[0], ]
@@ -27,6 +28,7 @@ def greedy_highest_value_over_array(values):
             best = values[i]
         best_values.append(best)
     return np.array(best_values)
+
 
 @dataclass
 class FactualExplanation:
@@ -70,7 +72,7 @@ class TPGExplainer(Explainer):
         self.tgnn_bridge.set_evaluation_mode(True)
 
     def _create_explainer(self) -> nn.Module:
-        embedding_dimension = self.embedding.dimension
+        embedding_dimension = self.embedding.double_dimension
         explainer_model = nn.Sequential(
             nn.Linear(embedding_dimension, self.hidden_dimension),
             nn.ReLU(),
@@ -111,8 +113,6 @@ class TPGExplainer(Explainer):
 
     def evaluate_fidelity(self, explanation: FactualExplanation):
         candidates = explanation.event_ids
-        candidate_weights = explanation.event_importances
-
         candidate_num = len(candidates)
 
         fidelity_list = []
@@ -129,7 +129,6 @@ class TPGExplainer(Explainer):
         fidelity_best = greedy_highest_value_over_array(fidelity_list)
         return sparsity_list.tolist(), fidelity_list, fidelity_best.tolist()
 
-
     @staticmethod
     def _loss(masked_probability, original_probability):
         if original_probability > 0:
@@ -145,7 +144,7 @@ class TPGExplainer(Explainer):
 
     def get_event_scores(self, explained_event_id, candidate_event_ids):
         self.tgnn_bridge.initialize(explained_event_id)
-        edge_embeddings = self.embedding.get_embedding(candidate_event_ids, explained_event_id)
+        edge_embeddings = self.embedding.get_double_embedding(candidate_event_ids, explained_event_id)
         return self.explainer(edge_embeddings)
 
     def train(self, epochs: int, learning_rate: float, batch_size: int, model_name: str, save_directory: str,
