@@ -11,8 +11,7 @@ from typing import List, Dict
 
 from sklearn.metrics import ndcg_score
 
-from CFTGNNExplainer.connector.tgnnwrapper import TGNNWrapper
-from CFTGNNExplainer.sampling.sampler import load_prediction_model
+from CFTGNNExplainer.sampling.sampler import create_embedding_model
 from common import (create_dataset_from_args, create_tgn_wrapper_from_args, add_dataset_arguments,
                     add_wrapper_model_arguments, parse_args)
 
@@ -105,18 +104,6 @@ def extract_training_data(explainer: EvaluationExplainer, emb: Embedding, epoch_
         progress_bar.next()
     progress_bar.close()
     return res
-
-
-def create_embedding_model(tgnn_wrapper: TGNNWrapper, emb: Embedding):
-    embedding_model = torch.nn.Sequential(
-        torch.nn.Dropout(p=0.5),
-        torch.nn.Linear(emb.single_dimension, 32),
-        torch.nn.ReLU(),
-        torch.nn.Dropout(p=0.5),
-        torch.nn.Linear(32, 32)
-    )
-    embedding_model.to(torch.device(tgnn_wrapper.device))
-    return embedding_model
 
 
 def calculate_gain(true_values: torch.Tensor) -> np.ndarray:
@@ -322,23 +309,21 @@ if __name__ == '__main__':
     else:
         embedding_type = 'static'
         embedding = StaticEmbedding(dataset, tgn_wrapper)
-    prediction_model = load_prediction_model(embedding.single_dimension, args.resume_path, tgn_wrapper.device)
 
-    adam_optimizer = torch.optim.Adam(prediction_model.parameters(), lr=1e-4)
     results_data = []
     loss_lists = []
-
     results = extract_training_data(eval_explainer, embedding, dataset.extract_random_event_ids('train'),
                                     depth=args.depth)
+
     with open(f'{args.model_save_path}/{tgn_wrapper.name}_intermediate_results.json', 'x+') as write_file:
         json.dump(results, write_file, cls=NumpyArrayEncoder)
     logger.info(f'Saved {len(results)} training examples to '
-                f'{args.model_save_path}/{tgn_wrapper.name}_intermediate_results.json')
+                f'{args.model_save_path}/{tgn_wrapper.name}_{embedding_type}_intermediate_results.json')
 
     logger.info('Starting training of sampler model...')
-    emb_model = create_embedding_model(tgn_wrapper, embedding)
+    emb_model = create_embedding_model(emb=embedding, device=tgn_wrapper.device)
     emb_model, train_losses, val_losses = train_embedding_model(emb_model, results, device=tgn_wrapper.device,
                                                                 epochs=args.epochs, early_stopping_threshold=50,
                                                                 early_stopping_greater_better=False)
     state_dict = emb_model.state_dict()
-    torch.save(state_dict, f'{args.model_save_path}/{tgn_wrapper.name}_sampler.pth')
+    torch.save(state_dict, f'{args.model_save_path}/{tgn_wrapper.name}_{embedding_type}_sampler.pth')

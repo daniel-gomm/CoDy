@@ -7,7 +7,7 @@ import pandas as pd
 
 from CFTGNNExplainer.data.dataset import TrainTestDatasetParameters
 from CFTGNNExplainer.sampling.embedding import DynamicEmbedding, StaticEmbedding
-from CFTGNNExplainer.sampling.sampler import load_prediction_model, PretrainedEdgeSamplerParameters
+from CFTGNNExplainer.sampling.sampler import create_embedding_model, PretrainedEdgeSamplerParameters
 from common import (add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args,
                     create_tgn_wrapper_from_args, parse_args, get_event_ids_from_file)
 
@@ -88,8 +88,8 @@ if __name__ == '__main__':
             embedding = DynamicEmbedding(dataset, tgn_wrapper, embed_static_node_features=False)
         else:
             embedding = StaticEmbedding(dataset, tgn_wrapper)
-        pretrained_sampler_model = load_prediction_model(embedding.single_dimension, args.sampler_model_path,
-                                                         tgn_wrapper.device)
+
+        pretrained_sampler_model = create_embedding_model(embedding, args.sampler_model_path, tgn_wrapper.device)
         sampler_params = PretrainedEdgeSamplerParameters(pretrained_sampler_model, embedding,
                                                          predict_for_each_sample=args.predict_for_each_sample)
 
