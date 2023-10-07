@@ -12,7 +12,7 @@ train_sampler() {
     echo "Created new directory for the final Sampler model and model checkpoints for the $1 dataset at $MODEL_PATH"
   fi
   echo "Training Sampler model for the $1 dataset..."
-  python "$SCRIPT_DIR/train_sampler.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --dynamic --model_save_path "$MODEL_PATH" --train_examples 250 --depth 2 --sample_size 25 --epochs 500 --model $TGN_PATH --candidates_size 75
+  python "$SCRIPT_DIR/train_sampler.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --dynamic --model_save_path "$MODEL_PATH" --train_examples 500 --depth 2 --sample_size 20 --epochs 500 --model $TGN_PATH --candidates_size 75
 }
 
 

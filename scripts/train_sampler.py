@@ -280,11 +280,11 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=5, help='Number of epochs to train the model for.')
     parser.add_argument('--model_save_path', required=True, type=str,
                         help='Path at which to save the model and its checkpoints')
-    parser.add_argument('--train_examples', type=int, default=100, required=True,
+    parser.add_argument('--train_examples', type=int, default=500, required=True,
                         help='Number of explained events to use to train the sampler')
     parser.add_argument('--depth', type=int, default=2, required=True,
                         help='Number of sampling steps per explained event')
-    parser.add_argument('--sample_size', type=int, default=10,
+    parser.add_argument('--sample_size', type=int, default=20,
                         help='Number of samples to draw in each sampling step')
     parser.add_argument('--candidates_size', type=int, default=75,
                         help='Number of candidates from which the samples are selected')
