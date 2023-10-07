@@ -14,7 +14,7 @@ class Embedding:
         self.model = model
 
     def get_double_embedding(self, event_ids: np.ndarray, explained_event_id: int):
-        edge_embeddings, explained_edge_embedding = self.get_double_embedding(event_ids, explained_event_id)
+        edge_embeddings, explained_edge_embedding = self.get_embeddings(event_ids, explained_event_id)
         explained_edge_embeddings = torch.tile(explained_edge_embedding, (len(edge_embeddings), 1))
         return torch.concatenate((edge_embeddings, explained_edge_embeddings), dim=1)
 
