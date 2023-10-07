@@ -16,7 +16,7 @@ From the source directory of this repository. This will install the package in e
 
 ## 2. Reproduce the results
 The easiest way to reproduce the CF-TGNNExplainer results is to follow this guide and use the provided bash scripts. 
-Alternatively you can also run the pyton scripts in the [/scripts](./scripts) directory for each steps directly, giving
+Alternatively you can also run the pyton scripts in the [/scripts](./scripts) directory for each step directly, giving
 you more freedom over the parameters.
 
 ### 2.1. Prepare the datasets
