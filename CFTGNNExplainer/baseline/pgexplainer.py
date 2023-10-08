@@ -109,7 +109,7 @@ class TPGExplainer(Explainer):
             'candidates': candidate_events.tolist()
         }
         return FactualExplanation(explained_event_id, candidate_events, edge_weights,
-                                  self.tgnn_bridge.original_score.detach().cpu().item(), timings, statistics)
+                                  self.tgnn_bridge.original_score, timings, statistics)
 
     def evaluate_fidelity(self, explanation: FactualExplanation):
         candidates = explanation.event_ids

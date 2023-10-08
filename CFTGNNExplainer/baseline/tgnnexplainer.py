@@ -96,24 +96,30 @@ class MCTSNode(object):
         return self
 
 
-def compute_scores(tgn_model: TTGNBridge, base_events, children, target_event_idx):
+def compute_scores(tgn_bridge: TTGNBridge, base_events, children, target_event_idx):
     results = []
     oracle_call_time = 0
+    original_prediction = tgn_bridge.original_score
     for child in children:
         if child.P == 0:
             before_oracle_call = time.time_ns()
-            score, _ = tgn_model.predict(target_event_idx, candidate_event_ids=base_events + child.coalition)
-            score = score.detach().cpu().item()
+            with torch.no_grad():
+                subgraph_prediction, _ = tgn_bridge.predict(target_event_idx, edge_id_preserve_list=base_events + child.coalition)
+            subgraph_prediction = subgraph_prediction.detach().cpu().item()
             oracle_call_time += time.time_ns() - before_oracle_call
+            if original_prediction >= 0:
+                reward = subgraph_prediction - original_prediction
+            else:
+                reward = original_prediction - subgraph_prediction
         else:
-            score = child.P
-        results.append(score)
+            reward = child.P
+        results.append(reward)
     return results, oracle_call_time
 
 
 class MCTS(object):
 
-    def __init__(self, events: DataFrame, tgn_wrapper: TTGNBridge, candidate_events=None, base_events=None,
+    def __init__(self, events: DataFrame, tgn_bridge: TTGNBridge, candidate_events=None, base_events=None,
                  candidate_initial_weights=None, node_idx: int = None, event_idx: int = None, n_rollout: int = 10,
                  min_atoms: int = 5, c_puct: float = 10.0):
 
@@ -133,7 +139,7 @@ class MCTS(object):
 
         self.num_nodes = self.events[COL_NODE_U].nunique() + self.events[COL_NODE_I].nunique()
 
-        self.tgn_wrapper = tgn_wrapper
+        self.tgn_bridge = tgn_bridge
 
         self.n_rollout = n_rollout
         self.min_atoms = min_atoms
@@ -210,7 +216,7 @@ class MCTS(object):
                     continue
 
             # compute scores of all children
-            scores, compute_oracle_call_time = compute_scores(self.tgn_wrapper, self.base_events, tree_node.children,
+            scores, compute_oracle_call_time = compute_scores(self.tgn_bridge, self.base_events, tree_node.children,
                                                               self.event_idx)
             self.oracle_call_time += compute_oracle_call_time
             self.oracle_calls += 1
@@ -351,8 +357,9 @@ class TGNNExplainer(Explainer):
             'candidate_events': torch.tensor(candidate_events, dtype=torch.int64, device=self.device),
             'edge_weights': edge_weights,
         }
-
-        original_prediction, _ = self.tgnn_bridge.predict(event_idx, edge_weights=candidate_weights_dict)
+        original_prediction, _ = self.tgnn_bridge.predict(event_idx,
+                                                          edge_id_preserve_list=self.tgnn_bridge.candidate_events +
+                                                                                self.tgnn_bridge.base_events)
         original_prediction = original_prediction.detach().cpu().item()
         e_idx_weight_dict = _agg_attention(self.tgnn_bridge.model.model)
         edge_weights = np.array([e_idx_weight_dict[e_idx] for e_idx in candidate_events])
@@ -373,7 +380,7 @@ class TGNNExplainer(Explainer):
                                    n_rollout=self.rollout,
                                    min_atoms=self.min_atoms,
                                    c_puct=self.c_puct,
-                                   tgn_wrapper=self.tgnn_bridge,
+                                   tgn_bridge=self.tgnn_bridge,
                                    candidate_initial_weights=candidate_initial_weights)
 
         tree_nodes = self.mcts_state_map.mcts(verbose=self.verbose)  # search
@@ -394,11 +401,11 @@ class TGNNExplainer(Explainer):
             candidate_initial_weights, original_prediction = self._get_candidate_weights(event_idx=explained_event_id)
             init_end_time = time.time_ns()
 
-            tree_nodes, tree_node_x = self.get_scores(event_idx=explained_event_id,
-                                                      candidate_initial_weights=candidate_initial_weights)
-            self._save_mcts_recorder(explained_event_id)  # always store
-            if self.save_results:  # sometimes store
-                self._save_mcts_nodes_info(tree_nodes, explained_event_id)
+        tree_nodes, tree_node_x = self.get_scores(event_idx=explained_event_id,
+                                                  candidate_initial_weights=candidate_initial_weights)
+        self._save_mcts_recorder(explained_event_id)  # always store
+        if self.save_results:  # sometimes store
+            self._save_mcts_nodes_info(tree_nodes, explained_event_id)
 
         candidate_events = self.tgnn_bridge.candidate_events
         results = []
@@ -448,14 +455,23 @@ class TGNNExplainer(Explainer):
         sort_idx = np.argsort(sparsity_list)  # ascending of sparsity
         sparsity_list = sparsity_list[sort_idx]
         fidelity_list = fidelity_list[sort_idx]
-        best_fidelity_list = greedy_highest_value_over_array(fidelity_list)
+
+        best_fidelity_at_depth = []
+        for sparsity_val in np.unique(sparsity_list):
+            best_fidelity_at_depth.append(fidelity_list[sparsity_list == sparsity_val].max())
+
+        best_fidelity_at_depth = np.array(best_fidelity_at_depth)
+
+        best_fidelity_list = greedy_highest_value_over_array(best_fidelity_at_depth)
+
+        sparsity_list = np.unique(sparsity_list)
 
         sparsity_thresholds = np.arange(0, 1.05, 0.05)
         indices = []
         for sparsity in sparsity_thresholds:
             indices.append(np.where(sparsity_list <= sparsity)[0].max())
 
-        fidelity_list = fidelity_list[indices]
+        fidelity_list = best_fidelity_at_depth[indices]
         best_fidelity_list = best_fidelity_list[indices]
 
         return sparsity_thresholds.tolist(), fidelity_list.tolist(), best_fidelity_list.tolist()

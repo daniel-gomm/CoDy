@@ -20,7 +20,8 @@ class TTGNBridge(TGNNBridge):
         (self.candidate_events,
          self.unique_edge_ids,
          self.base_events,
-         self.original_score) = self.model.initialize(event_id, self.explanation_candidates_size)
+         original_score) = self.model.initialize(event_id, self.explanation_candidates_size)
+        self.original_score = original_score.detach().cpu().item()
         self.last_predicted_event_id = event_id
 
     def initialize_static(self, event_id: int):
@@ -45,7 +46,7 @@ class TTGNBridge(TGNNBridge):
         return self.candidate_events
 
     def reset_model(self):
-        pass
+        self.model.reset_model()
 
     def remove_memory_backup(self, label: str):
         pass
