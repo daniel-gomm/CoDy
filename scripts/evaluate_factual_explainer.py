@@ -31,13 +31,12 @@ def evaluate(evaluated_explainer: TGNNExplainer | TPGExplainer, explained_event_
 
     for event_id in explained_event_ids:
         try:
-            with torch.no_grad():
-                explanation = evaluated_explainer.explain(event_id)
-                sparsity_list, fidelity_list, fidelity_best = evaluated_explainer.evaluate_fidelity(explanation)
-                explanation.statistics['sparsity'] = sparsity_list
-                explanation.statistics['fidelity'] = fidelity_list
-                explanation.statistics['best fidelity'] = fidelity_best
-                explanation_list.append(explanation)
+            explanation = evaluated_explainer.explain(event_id)
+            sparsity_list, fidelity_list, fidelity_best = evaluated_explainer.evaluate_fidelity(explanation)
+            explanation.statistics['sparsity'] = sparsity_list
+            explanation.statistics['fidelity'] = fidelity_list
+            explanation.statistics['best fidelity'] = fidelity_best
+            explanation_list.append(explanation)
         except RuntimeError:
             progress_bar.write(f'Could not find any candidates to explain {event_id}')
         progress_bar.next()
