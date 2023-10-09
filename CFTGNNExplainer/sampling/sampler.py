@@ -8,16 +8,18 @@ from CFTGNNExplainer.constants import COL_ID, COL_SUBGRAPH_DISTANCE, COL_TIMESTA
 from CFTGNNExplainer.sampling.embedding import Embedding
 
 
-def load_prediction_model(embedding_dim: int, model_path: str = None, device: str = 'cpu') -> torch.nn.Module:
-    prediction_model = torch.nn.Sequential(
-        torch.nn.Linear(embedding_dim, 128),
+def create_embedding_model(emb: Embedding, model_path: str = None, device: str = 'cpu'):
+    embedding_model = torch.nn.Sequential(
+        torch.nn.Dropout(p=0.5),
+        torch.nn.Linear(emb.single_dimension, 32),
         torch.nn.ReLU(),
-        torch.nn.Linear(128, 1)
+        torch.nn.Dropout(p=0.5),
+        torch.nn.Linear(32, 32)
     )
     if model_path is not None:
-        prediction_model.load_state_dict(torch.load(model_path))
-    prediction_model.to(torch.device(device))
-    return prediction_model
+        embedding_model.load_state_dict(torch.load(model_path))
+    embedding_model.to(torch.device(device))
+    return embedding_model
 
 
 def filter_subgraph(base_event_id: int, excluded_events: np.ndarray, subgraph: pd.DataFrame,
@@ -81,7 +83,7 @@ class ClosestEdgeSampler(EdgeSampler):
 
 @dataclass
 class PretrainedEdgeSamplerParameters:
-    prediction_model: torch.nn.Module
+    embedding_model: torch.nn.Module
     embedding: Embedding
     predict_for_each_sample: bool
 
@@ -91,16 +93,21 @@ class PretrainedEdgeSampler(EdgeSampler):
     def __init__(self, subgraph: pd.DataFrame, parameters: PretrainedEdgeSamplerParameters, explained_event_id: int,
                  original_prediction: float):
         super().__init__(subgraph)
-        self.prediction_model = parameters.prediction_model
+        self.embedding_model = parameters.embedding_model
         self.embedding = parameters.embedding
-        self.sort_weights_ascending = (original_prediction > 0)
+        self.positive_original_prediction = (original_prediction > 0)
         self.initial_weights = None
-        self.prediction_model.eval()
+        self.embedding_model.eval()
         if not parameters.predict_for_each_sample:
             subgraph_ids = self.subgraph[COL_ID].to_numpy()
-            embeddings = self.embedding.get_embedding(subgraph_ids, explained_event_id)
-            weights = self.prediction_model(embeddings)
+            weights = self._embeddings_to_weights(subgraph_ids, explained_event_id)
             self.initial_weights = weights.detach().cpu().flatten().numpy()
+
+    def _embeddings_to_weights(self, event_ids, base_event_id):
+        excluded_edges_embeddings, explained_edge_embedding = self.embedding.get_embeddings(event_ids, base_event_id)
+        explained_edge_embeddings = torch.tile(explained_edge_embedding, (len(excluded_edges_embeddings), 1))
+        predictions = torch.nn.functional.cosine_similarity(explained_edge_embeddings, excluded_edges_embeddings)
+        return predictions.detach().cpu().flatten().numpy()
 
     def sample(self, base_event_id: int, excluded_events: np.ndarray, size: int,
                known_cf_examples: List[np.ndarray] | None = None) -> np.ndarray:
@@ -109,13 +116,11 @@ class PretrainedEdgeSampler(EdgeSampler):
         if len(event_ids) < size:
             return event_ids
         if self.initial_weights is None:
-            embeddings = self.embedding.get_embedding(event_ids, base_event_id)
-            weights = self.prediction_model(embeddings)
-            weights = weights.detach().cpu().flatten().numpy()
+            weights = self._embeddings_to_weights(event_ids, base_event_id)
         else:
             subgraph_without_base_event = self.subgraph[self.subgraph[COL_ID] != base_event_id]
             edge_mask = subgraph_without_base_event[COL_ID].isin(event_ids).to_numpy()
             weights = self.initial_weights[edge_mask]
         filtered_subgraph['weights'] = weights
-        sorted_subgraph = filtered_subgraph.sort_values(by='weights', ascending=self.sort_weights_ascending)
+        sorted_subgraph = filtered_subgraph.sort_values(by='weights', ascending=self.positive_original_prediction)
         return sorted_subgraph[COL_ID].to_numpy()[:size]

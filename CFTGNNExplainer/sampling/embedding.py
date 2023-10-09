@@ -6,13 +6,19 @@ from CFTGNNExplainer.data.dataset import ContinuousTimeDynamicGraphDataset
 
 
 class Embedding:
-    dimension: int
+    double_dimension: int
+    single_dimension: int
 
     def __init__(self, dataset: ContinuousTimeDynamicGraphDataset, model: TGNNWrapper):
         self.dataset = dataset
         self.model = model
 
-    def get_embedding(self, event_ids: np.ndarray, explained_event_id: int):
+    def get_double_embedding(self, event_ids: np.ndarray, explained_event_id: int):
+        edge_embeddings, explained_edge_embedding = self.get_embeddings(event_ids, explained_event_id)
+        explained_edge_embeddings = torch.tile(explained_edge_embedding, (len(edge_embeddings), 1))
+        return torch.concatenate((edge_embeddings, explained_edge_embeddings), dim=1)
+
+    def get_embeddings(self, event_ids: np.ndarray, explained_event_id: int):
         raise NotImplementedError
 
     def extract_static_features(self, event_ids: np.ndarray, explained_event_id: int):
@@ -39,9 +45,10 @@ class StaticEmbedding(Embedding):
         time_embedding_dimension = model.time_embedding_dimension
         node_features = self.dataset.node_features.shape[1]
         edge_features = self.dataset.edge_features.shape[1]
-        self.dimension = (2 * node_features + edge_features + time_embedding_dimension) * 2
+        self.single_dimension = (2 * node_features + edge_features + time_embedding_dimension)
+        self.double_dimension = self.single_dimension * 2
 
-    def get_embedding(self, event_ids: np.ndarray, explained_event_id: int):
+    def get_embeddings(self, event_ids: np.ndarray, explained_event_id: int):
         (source_node_features, target_node_features, edge_features,
          timestamp_embeddings, _, _) = self.extract_static_features(event_ids, explained_event_id)
 
@@ -52,9 +59,7 @@ class StaticEmbedding(Embedding):
 
         explained_edge_embedding = edge_embeddings[-1]
         edge_embeddings = edge_embeddings[:-1]
-        explained_edge_embeddings = torch.tile(explained_edge_embedding, (len(edge_embeddings), 1))
-
-        return torch.concatenate((edge_embeddings, explained_edge_embeddings), dim=1)
+        return edge_embeddings, explained_edge_embedding
 
 
 class DynamicEmbedding(Embedding):
@@ -70,12 +75,18 @@ class DynamicEmbedding(Embedding):
         node_features = self.dataset.node_features.shape[1]
         edge_features = self.dataset.edge_features.shape[1]
         if embed_static_node_features:
-            self.dimension = (2 * node_embedding_dimension + 2 * node_features + edge_features +
-                              time_embedding_dimension) * 2
+            self.single_dimension = (2 * node_embedding_dimension + 2 * node_features + edge_features +
+                                     time_embedding_dimension)
         else:
-            self.dimension = (2 * node_embedding_dimension + edge_features + time_embedding_dimension) * 2
+            self.single_dimension = (2 * node_embedding_dimension + edge_features + time_embedding_dimension)
+        self.double_dimension = self.single_dimension * 2
 
-    def get_embedding(self, event_ids: np.ndarray, explained_event_id: int):
+    def get_double_embedding(self, event_ids: np.ndarray, explained_event_id: int):
+        edge_embeddings, explained_edge_embedding = self.get_double_embedding(event_ids, explained_event_id)
+        explained_edge_embeddings = torch.tile(explained_edge_embedding, (len(edge_embeddings), 1))
+        return torch.concatenate((edge_embeddings, explained_edge_embeddings), dim=1)
+
+    def get_embeddings(self, event_ids: np.ndarray, explained_event_id: int):
         self.model.activate_evaluation_mode()
         (source_node_features, target_node_features, edge_features, timestamp_embeddings, involved_source_nodes,
          involved_target_nodes) = self.extract_static_features(event_ids, explained_event_id)
@@ -103,6 +114,5 @@ class DynamicEmbedding(Embedding):
 
         explained_edge_embedding = edge_embeddings[-1]
         edge_embeddings = edge_embeddings[:-1]
-        explained_edge_embeddings = torch.tile(explained_edge_embedding, (len(edge_embeddings), 1))
 
-        return torch.concatenate((edge_embeddings, explained_edge_embeddings), dim=1)
+        return edge_embeddings, explained_edge_embedding

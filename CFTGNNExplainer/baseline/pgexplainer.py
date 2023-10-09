@@ -1,6 +1,8 @@
 from dataclasses import dataclass
+from typing import Dict
 
 import numpy as np
+import time
 
 from CFTGNNExplainer.sampling.embedding import Embedding
 from CFTGNNExplainer.baseline.ttgnbridge import TTGNBridge
@@ -12,13 +14,30 @@ import torch.optim
 from CFTGNNExplainer.utils import ProgressBar
 
 
+def fidelity(original_prediction, important_prediction):
+    if original_prediction >= 0:  # logit
+        return important_prediction - original_prediction
+    return original_prediction - important_prediction
+
+
+def greedy_highest_value_over_array(values):
+    best_values = [values[0], ]
+    best = values[0]
+    for i in range(1, len(values)):
+        if best < values[i]:
+            best = values[i]
+        best_values.append(best)
+    return np.array(best_values)
+
 
 @dataclass
 class FactualExplanation:
     explained_event_id: int
-    original_score: float
     event_ids: np.ndarray
     event_importances: np.ndarray
+    original_score: float
+    timings: Dict
+    statistics: Dict
 
     def get_absolute_importances(self) -> np.ndarray:
         return np.array([importance - np.sum(self.event_importances[index - 1:index]) for index, importance in
@@ -29,23 +48,31 @@ class FactualExplanation:
             return np.ndarray([])
         return self.get_absolute_importances() / self.event_importances[-1]
 
+    def to_dict(self) -> Dict:
+        results = {
+            'explained_event_id': self.explained_event_id,
+            'event_ids': self.event_ids.tolist(),
+            'event_importances': self.event_importances.tolist(),
+            'original_score': self.original_score
+        }
+        results.update(self.statistics)
+        results.update(self.timings)
+        return results
+
 
 class TPGExplainer(Explainer):
 
-    def __init__(self, tgnn_bridge: TTGNBridge, embedding: Embedding, device: str = 'cpu', bias: float = 0.0,
-                 temperature: (float, float) = (5.0, 2.0), hidden_dimension: int = 128):
+    def __init__(self, tgnn_bridge: TTGNBridge, embedding: Embedding, device: str = 'cpu', hidden_dimension: int = 128):
         super().__init__(tgnn_bridge)
         self.tgnn_bridge = tgnn_bridge
         self.device = device
         self.embedding = embedding
-        self.bias = bias
-        self.temperature = temperature
         self.hidden_dimension = hidden_dimension
         self.explainer = self._create_explainer()
         self.tgnn_bridge.set_evaluation_mode(True)
 
     def _create_explainer(self) -> nn.Module:
-        embedding_dimension = self.embedding.dimension
+        embedding_dimension = self.embedding.double_dimension
         explainer_model = nn.Sequential(
             nn.Linear(embedding_dimension, self.hidden_dimension),
             nn.ReLU(),
@@ -55,36 +82,61 @@ class TPGExplainer(Explainer):
         return explainer_model
 
     def explain(self, explained_event_id: int) -> FactualExplanation:
+        start_time = time.time_ns()
         self.tgnn_bridge.reset_model()
         self.explainer.eval()
+        self.tgnn_bridge.initialize(explained_event_id)
+        init_end_time = time.time_ns()
         with torch.no_grad():
             candidate_events = self.tgnn_bridge.get_candidate_events(explained_event_id)
-            if len(candidate_events):
-                return FactualExplanation(np.ndarray([]), np.ndarray([]))
+            if len(candidate_events) == 0:
+                raise RuntimeError(f'No candidates found to explain event {explained_event_id}')
             edge_weights = self.get_event_scores(explained_event_id, candidate_events)
             edge_weights = edge_weights.cpu().detach().numpy().flatten()
             sorted_indices = np.argsort(edge_weights)[::-1]  # declining
             edge_weights = edge_weights[sorted_indices]
             candidate_events = np.array(candidate_events)[sorted_indices]
-        return FactualExplanation(candidate_events, edge_weights)
+        end_time = time.time_ns()
+        timings = {
+            'oracle_call_duration': 0,
+            'explanation_duration': end_time - init_end_time,
+            'init_duration': init_end_time - start_time,
+            'total_duration': end_time - start_time
+        }
+        statistics = {
+            'oracle_calls': 0,
+            'candidate_size': len(candidate_events),
+            'candidates': candidate_events.tolist()
+        }
+        return FactualExplanation(explained_event_id, candidate_events, edge_weights,
+                                  self.tgnn_bridge.original_score, timings, statistics)
 
-    def _loss(self, masked_probability, original_probability):
-        # error_loss = torch.nn.functional.cross_entropy(masked_prediction, original_prediction)
-        # error_loss = torch.nn.functional.mse_loss(masked_probability, original_probability)
+    def evaluate_fidelity(self, explanation: FactualExplanation):
+        candidates = explanation.event_ids
+        candidate_num = len(candidates)
 
+        fidelity_list = []
+        sparsity_list = np.arange(0, 1.05, 0.05)
+        for sparsity in sparsity_list:
+            sparsity_cutoff = int(sparsity * candidate_num)
+            important_events = candidates[:sparsity_cutoff + 1]
+            b_i_events = self.tgnn_bridge.base_events + important_events.tolist()
+            prediction, _ = self.tgnn_bridge.predict(explanation.explained_event_id, edge_id_preserve_list=b_i_events)
+            prediction = prediction.detach().cpu().item()
+            fid = fidelity(explanation.original_score, prediction)
+            fidelity_list.append(fid)
+
+        fidelity_best = greedy_highest_value_over_array(fidelity_list)
+        return sparsity_list.tolist(), fidelity_list, fidelity_best.tolist()
+
+    @staticmethod
+    def _loss(masked_probability, original_probability):
         if original_probability > 0:
             error_loss = (masked_probability - original_probability) * -1
         else:
             error_loss = (original_probability - masked_probability) * -1
 
-        # mask = edge_mask.sigmoid()
-        # size_loss = mask.sum() * 0.001
-
-        # mask = 0.99 * mask + 0.005
-        # mask_ent = -mask * mask.log() - (1 - mask) * (1 - mask).log()
-        # mask_ent_loss = mask_ent.mean()
-
-        return error_loss  # + size_loss # + mask_ent_loss
+        return error_loss
 
     def _save_explainer(self, path: str):
         state_dict = self.explainer.state_dict()
@@ -92,7 +144,7 @@ class TPGExplainer(Explainer):
 
     def get_event_scores(self, explained_event_id, candidate_event_ids):
         self.tgnn_bridge.initialize(explained_event_id)
-        edge_embeddings = self.embedding.get_embedding(candidate_event_ids, explained_event_id)
+        edge_embeddings = self.embedding.get_double_embedding(candidate_event_ids, explained_event_id)
         return self.explainer(edge_embeddings)
 
     def train(self, epochs: int, learning_rate: float, batch_size: int, model_name: str, save_directory: str,
@@ -101,9 +153,6 @@ class TPGExplainer(Explainer):
         optimizer = torch.optim.Adam(self.explainer.parameters(), lr=learning_rate)
 
         generate_event_ids = (train_event_ids is None)
-        dataset = self.tgnn_bridge.model.dataset
-        train_start_id = int(len(dataset.events) * dataset.parameters.training_start)
-        train_end_id = int(len(dataset.events) * dataset.parameters.training_end)
 
         for epoch in range(epochs):
             if generate_event_ids:

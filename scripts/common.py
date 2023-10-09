@@ -29,7 +29,7 @@ def add_dataset_arguments(parser: ArgumentParser):
 
 
 def add_wrapper_model_arguments(parser: ArgumentParser):
-    parser.add_argument('-m', '--model', required=True, default=None, type=str,
+    parser.add_argument('-m', '--model', default=None, type=str,
                         help='Path to the model checkpoint to use')
     parser.add_argument('--cuda', action='store_true', help='Use cuda for GPU utilization')
 
@@ -37,7 +37,7 @@ def add_wrapper_model_arguments(parser: ArgumentParser):
 def add_model_training_arguments(parser: ArgumentParser):
     parser.add_argument('--model_path', type=str, required=True,
                         help='Path to the directory where the model checkpoints, final model and results are saved to.')
-    parser.add_argument('--epochs', type=int, default=50, help='Number of epochs to train the model for.')
+    parser.add_argument('-e', '--epochs', type=int, default=50, help='Number of epochs to train the model for.')
 
 
 def create_dataset_from_args(args: Namespace, parameters: TrainTestDatasetParameters | None = None) -> (
@@ -104,6 +104,7 @@ def get_event_ids_from_file(event_ids_filepath: str | None, dataset: ContinuousT
         return np.load(event_ids_filepath)
     else:
         logger.info('No event ids to explain provided. Generating new ones...')
-        event_ids_to_explain = dataset.extract_random_event_ids(section='validation')
+        event_ids_to_explain = dataset.extract_random_event_ids(section='train')
         event_ids_to_explain = np.array(event_ids_to_explain)
         np.save(event_ids_filepath, event_ids_to_explain)
+        return event_ids_to_explain

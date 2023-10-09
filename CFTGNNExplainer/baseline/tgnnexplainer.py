@@ -2,45 +2,24 @@ import copy
 import math
 import time
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from dataclasses import dataclass
 
-import networkx as nx
 import numpy as np
 import torch
 from pandas import DataFrame
-from tqdm import tqdm
 
 from CFTGNNExplainer.sampling.embedding import Embedding
-from CFTGNNExplainer.baseline.pgexplainer import TPGExplainer
+from CFTGNNExplainer.baseline.pgexplainer import TPGExplainer, greedy_highest_value_over_array
 from CFTGNNExplainer.baseline.ttgnbridge import TTGNBridge
 from CFTGNNExplainer.constants import COL_TIMESTAMP, COL_NODE_U, COL_NODE_I, COL_ID
 from CFTGNNExplainer.explainer.base import Explainer
+from CFTGNNExplainer.utils import ProgressBar
 from TTGN.model.tgn import TGN
+
 
 # Reimplementation of T-GNNExplainer by Xia et al. https://openreview.net/forum?id=BR_ZhvcYbGJ most of the code is
 #  directly copied from the original implementation, alongside the TTGN (T-GNNExplainer TGN) version of the TGN model
-
-@dataclass
-class TGNNExplainerExplanation:
-    explained_event_id: int
-    original_prediction: float
-    best_prediction: float
-    results: Dict
-    timings: Dict
-    statistics: Dict
-    
-    def to_dict(self) -> Dict:
-        results = {
-            'explained_event_id': self.explained_event_id,
-            'original_prediction': self.original_prediction,
-            'best_prediction': self.best_prediction,
-            'results': self.results
-        }
-        results.update(self.statistics)
-        results.update(self.timings)
-        return results
-
 
 def _agg_attention(model: TGN):
     attention_weights_list = model.embedding_module.atten_weights_list
@@ -63,25 +42,6 @@ def _agg_attention(model: TGN):
         e_idx_weight_dict[e_idx] = np.mean(e_idx_weight_dict[e_idx])
 
     return e_idx_weight_dict
-
-
-def to_networkx_tg(events: DataFrame):
-    base = events[COL_NODE_U].max() + 1
-    g = nx.MultiGraph()
-    g.add_nodes_from(events[COL_NODE_U])
-    g.add_nodes_from(events[COL_NODE_I] + base)
-    t_edges = []
-    for i in range(len(events)):
-        user, item, t, e_idx = events[COL_NODE_U][i], events[COL_NODE_I][i], events[COL_TIMESTAMP][i], events.index[i]
-        t_edges.append((user, item, {'t': t, 'e_idx': i},))
-    g.add_edges_from(t_edges)
-    return g
-
-
-def print_nodes(tree_nodes):
-    print('\nSearched tree nodes (preserved edge idxs in candidates):')
-    for i, node in enumerate(tree_nodes):
-        print(i, sorted(node.coalition), ': ', node.P)
 
 
 def find_best_node_result(all_nodes, min_atoms=6):
@@ -108,7 +68,6 @@ class MCTSNode(object):
         return self.W / self.N if self.N > 0 else 0
 
     def u(self, n):
-        # return self.c_puct * self.P * math.sqrt(n) / (1 + self.N)
         return self.c_puct * math.sqrt(n) / (1 + self.N)
 
     @property
@@ -137,34 +96,30 @@ class MCTSNode(object):
         return self
 
 
-def compute_scores(tgn_model: TTGNBridge, base_events, children, target_event_idx):
+def compute_scores(tgn_bridge: TTGNBridge, base_events, children, target_event_idx):
     results = []
     oracle_call_time = 0
+    original_prediction = tgn_bridge.original_score
     for child in children:
         if child.P == 0:
             before_oracle_call = time.time_ns()
-            score, _ = tgn_model.predict(target_event_idx, candidate_event_ids=base_events + child.coalition)
-            score = score.detach().cpu().item()
+            with torch.no_grad():
+                subgraph_prediction, _ = tgn_bridge.predict(target_event_idx, edge_id_preserve_list=base_events + child.coalition)
+            subgraph_prediction = subgraph_prediction.detach().cpu().item()
             oracle_call_time += time.time_ns() - before_oracle_call
+            if original_prediction >= 0:
+                reward = subgraph_prediction - original_prediction
+            else:
+                reward = original_prediction - subgraph_prediction
         else:
-            score = child.P
-        results.append(score)
+            reward = child.P
+        results.append(reward)
     return results, oracle_call_time
-
-
-def base_and_important_events(base_events, candidate_events, coalition):
-    return base_events + coalition
-
-
-def base_and_unimportant_events(base_events, candidate_events, coalition):
-    important_ = set(coalition)
-    unimportant_events = list(filter(lambda x: x not in important_, candidate_events))
-    return base_events + unimportant_events
 
 
 class MCTS(object):
 
-    def __init__(self, events: DataFrame, tgn_wrapper: TTGNBridge, candidate_events=None, base_events=None,
+    def __init__(self, events: DataFrame, tgn_bridge: TTGNBridge, candidate_events=None, base_events=None,
                  candidate_initial_weights=None, node_idx: int = None, event_idx: int = None, n_rollout: int = 10,
                  min_atoms: int = 5, c_puct: float = 10.0):
 
@@ -184,7 +139,7 @@ class MCTS(object):
 
         self.num_nodes = self.events[COL_NODE_U].nunique() + self.events[COL_NODE_I].nunique()
 
-        self.tgn_wrapper = tgn_wrapper
+        self.tgn_bridge = tgn_bridge
 
         self.n_rollout = n_rollout
         self.min_atoms = min_atoms
@@ -228,9 +183,9 @@ class MCTS(object):
 
                 # check the state map and merge the same sub-tg-graph (node in the tree)
                 find_same = False
-                subnode_coalition_key = self._node_key(important_events)
+                sub_node_coalition_key = self._node_key(important_events)
                 for key in self.state_map.keys():
-                    if key == subnode_coalition_key:
+                    if key == sub_node_coalition_key:
                         new_tree_node = self.state_map[key]
                         find_same = True
                         break
@@ -243,7 +198,7 @@ class MCTS(object):
                         sparsity=len(important_events) / len(self.candidate_events)
                     )
 
-                    self.state_map[subnode_coalition_key] = new_tree_node
+                    self.state_map[sub_node_coalition_key] = new_tree_node
 
                 # find same child ?
                 find_same_child = False
@@ -261,7 +216,7 @@ class MCTS(object):
                     continue
 
             # compute scores of all children
-            scores, compute_oracle_call_time = compute_scores(self.tgn_wrapper, self.base_events, tree_node.children,
+            scores, compute_oracle_call_time = compute_scores(self.tgn_bridge, self.base_events, tree_node.children,
                                                               self.event_idx)
             self.oracle_call_time += compute_oracle_call_time
             self.oracle_calls += 1
@@ -308,11 +263,12 @@ class MCTS(object):
             print(f"The nodes in graph is {self.subgraph_num_nodes}")
 
         start_time = time.time()
-        pbar = tqdm(range(self.n_rollout), total=self.n_rollout, desc='mcts simulating')
-        for rollout_idx in pbar:
+        progress_bar = ProgressBar(max_item=self.n_rollout, prefix='Simulating MCTS')
+        for rollout_idx in range(self.n_rollout):
+            progress_bar.next()
             self.mcts_rollout(self.root)
             elapsed_time = time.time() - start_time
-            pbar.set_postfix({'states': len(self.state_map)})
+            progress_bar.update_postfix(f'states: {len(self.state_map)}')
             # record
             self.recorder['rollout'].append(rollout_idx)
             self.recorder['runtime'].append(elapsed_time)
@@ -324,7 +280,7 @@ class MCTS(object):
         self.run_time = end_time - start_time
 
         tree_nodes = list(self.state_map.values())
-
+        progress_bar.close()
         return tree_nodes
 
     def _initialize_tree(self):
@@ -340,6 +296,28 @@ class MCTS(object):
     @staticmethod
     def _node_key(coalition):
         return "_".join(map(lambda x: str(x), sorted(coalition)))  # NOTE: have sorted
+
+
+@dataclass
+class TGNNExplainerExplanation:
+    explained_event_id: int
+    original_prediction: float
+    best_prediction: float
+    results: List[Dict]
+    timings: Dict
+    statistics: Dict
+    tree_nodes: List[MCTSNode]
+
+    def to_dict(self) -> Dict:
+        results = {
+            'explained_event_id': self.explained_event_id,
+            'original_prediction': self.original_prediction,
+            'best_prediction': self.best_prediction,
+            'results': self.results
+        }
+        results.update(self.statistics)
+        results.update(self.timings)
+        return results
 
 
 class TGNNExplainer(Explainer):
@@ -363,9 +341,9 @@ class TGNNExplainer(Explainer):
 
         self.tgnn_bridge.model.dataset.events['e_idx'] = self.tgnn_bridge.model.dataset.events[COL_ID].copy()
 
-    def write_from_MCTSNode_list(self, MCTSNode_list):
-        if isinstance(MCTSNode_list[0], MCTSNode):
-            ret_list = [node.info for node in MCTSNode_list]
+    def write_from_mcts_node_list(self, mcts_node_list):
+        if isinstance(mcts_node_list[0], MCTSNode):
+            ret_list = [node.info for node in mcts_node_list]
         else:
             raise NotImplementedError
         return ret_list
@@ -379,8 +357,9 @@ class TGNNExplainer(Explainer):
             'candidate_events': torch.tensor(candidate_events, dtype=torch.int64, device=self.device),
             'edge_weights': edge_weights,
         }
-
-        original_prediction, _ = self.tgnn_bridge.predict(event_idx, edge_weights=candidate_weights_dict)
+        original_prediction, _ = self.tgnn_bridge.predict(event_idx,
+                                                          edge_id_preserve_list=self.tgnn_bridge.candidate_events +
+                                                                                self.tgnn_bridge.base_events)
         original_prediction = original_prediction.detach().cpu().item()
         e_idx_weight_dict = _agg_attention(self.tgnn_bridge.model.model)
         edge_weights = np.array([e_idx_weight_dict[e_idx] for e_idx in candidate_events])
@@ -401,7 +380,7 @@ class TGNNExplainer(Explainer):
                                    n_rollout=self.rollout,
                                    min_atoms=self.min_atoms,
                                    c_puct=self.c_puct,
-                                   tgn_wrapper=self.tgnn_bridge,
+                                   tgn_bridge=self.tgnn_bridge,
                                    candidate_initial_weights=candidate_initial_weights)
 
         tree_nodes = self.mcts_state_map.mcts(verbose=self.verbose)  # search
@@ -421,15 +400,16 @@ class TGNNExplainer(Explainer):
             self.tgnn_bridge.initialize(explained_event_id)
             candidate_initial_weights, original_prediction = self._get_candidate_weights(event_idx=explained_event_id)
             init_end_time = time.time_ns()
-            tree_nodes, tree_node_x = self.get_scores(event_idx=explained_event_id,
-                                                      candidate_initial_weights=candidate_initial_weights)
-            self._save_mcts_recorder(explained_event_id)  # always store
-            if self.save_results:  # sometimes store
-                self._save_mcts_nodes_info(tree_nodes, explained_event_id)
+
+        tree_nodes, tree_node_x = self.get_scores(event_idx=explained_event_id,
+                                                  candidate_initial_weights=candidate_initial_weights)
+        self._save_mcts_recorder(explained_event_id)  # always store
+        if self.save_results:  # sometimes store
+            self._save_mcts_nodes_info(tree_nodes, explained_event_id)
 
         candidate_events = self.tgnn_bridge.candidate_events
         results = []
-        for i in range(1, len(candidate_events)+1):
+        for i in range(1, len(candidate_events) + 1):
             best_node_at_i = find_best_node_result(tree_nodes, i)
             results.append({
                 'prediction': best_node_at_i.P,
@@ -439,7 +419,8 @@ class TGNNExplainer(Explainer):
         end_time = time.time_ns()
         oracle_call_time = self.mcts_state_map.oracle_call_time
         timings['oracle_call_duration'] = oracle_call_time
-        timings['explanation_duration'] = end_time - start_time - oracle_call_time
+        timings['explanation_duration'] = end_time - init_end_time - oracle_call_time
+        timings['init_duration'] = init_end_time - start_time
         timings['total_duration'] = end_time - start_time
         statistics['oracle_calls'] = self.mcts_state_map.oracle_calls
         statistics['candidate_size'] = len(candidate_events)
@@ -449,7 +430,51 @@ class TGNNExplainer(Explainer):
         best_prediction = tree_nodes[0].P
 
         return TGNNExplainerExplanation(explained_event_id=explained_event_id, original_prediction=original_prediction,
-                                 best_prediction=best_prediction, results=results, timings=timings, statistics=statistics)
+                                        best_prediction=best_prediction, results=results, timings=timings,
+                                        statistics=statistics, tree_nodes=tree_nodes)
+
+    def evaluate_fidelity(self, explanation: TGNNExplainerExplanation) -> (List, List, List):
+        tree_nodes = explanation.tree_nodes
+        sparsity_list = []
+        fidelity_list = []
+
+        candidate_events = explanation.statistics['candidates']
+        candidate_num = len(candidate_events)
+        for node in tree_nodes:
+            sparsity = len(node.coalition) / candidate_num
+            assert np.isclose(sparsity, node.Sparsity)
+
+            fidelity = node.P
+            fidelity_list.append(fidelity)
+            sparsity_list.append(sparsity)
+
+        sparsity_list = np.array(sparsity_list)
+        fidelity_list = np.array(fidelity_list)
+
+        # sort according to sparsity
+        sort_idx = np.argsort(sparsity_list)  # ascending of sparsity
+        sparsity_list = sparsity_list[sort_idx]
+        fidelity_list = fidelity_list[sort_idx]
+
+        best_fidelity_at_depth = []
+        for sparsity_val in np.unique(sparsity_list):
+            best_fidelity_at_depth.append(fidelity_list[sparsity_list == sparsity_val].max())
+
+        best_fidelity_at_depth = np.array(best_fidelity_at_depth)
+
+        best_fidelity_list = greedy_highest_value_over_array(best_fidelity_at_depth)
+
+        sparsity_list = np.unique(sparsity_list)
+
+        sparsity_thresholds = np.arange(0, 1.05, 0.05)
+        indices = []
+        for sparsity in sparsity_thresholds:
+            indices.append(np.where(sparsity_list <= sparsity)[0].max())
+
+        fidelity_list = best_fidelity_at_depth[indices]
+        best_fidelity_list = best_fidelity_list[indices]
+
+        return sparsity_thresholds.tolist(), fidelity_list.tolist(), best_fidelity_list.tolist()
 
     def _save_mcts_recorder(self, event_idx):
         # save records
@@ -462,13 +487,14 @@ class TGNNExplainer(Explainer):
         print(f'mcts recorder saved at {str(record_filename)}')
 
     def _save_mcts_nodes_info(self, tree_nodes, event_idx):
-        saved_contents = {
-            'saved_MCTSInfo_list': self.write_from_MCTSNode_list(tree_nodes),
-        }
-        path = self._mcts_node_info_path(self.mcts_saved_dir, self.tgnn_bridge.model.name, self.dataset.name,
-                                         event_idx, suffix='')
-        torch.save(saved_contents, path)
-        print(f'results saved at {path}')
+        if self.mcts_saved_dir is not None:
+            saved_contents = {
+                'saved_MCTSInfo_list': self.write_from_mcts_node_list(tree_nodes),
+            }
+            path = self._mcts_node_info_path(self.mcts_saved_dir, self.tgnn_bridge.model.name, self.dataset.name,
+                                             event_idx, suffix='')
+            torch.save(saved_contents, path)
+            print(f'results saved at {path}')
 
     @staticmethod
     def _mcts_recorder_path(result_dir, model_name, dataset_name, event_idx, suffix):
@@ -482,8 +508,9 @@ class TGNNExplainer(Explainer):
     @staticmethod
     def _mcts_node_info_path(node_info_dir, model_name, dataset_name, event_idx, suffix):
         if suffix is not None:
-            node_info_filename = Path(node_info_dir)/f"{model_name}_{dataset_name}_{event_idx}_mcts_node_info_{suffix}.pt"
+            node_info_filename = Path(
+                node_info_dir) / f"{model_name}_{dataset_name}_{event_idx}_mcts_node_info_{suffix}.pt"
         else:
-            node_info_filename = Path(node_info_dir)/f"{model_name}_{dataset_name}_{event_idx}_mcts_node_info.pt"
+            node_info_filename = Path(node_info_dir) / f"{model_name}_{dataset_name}_{event_idx}_mcts_node_info.pt"
 
         return node_info_filename

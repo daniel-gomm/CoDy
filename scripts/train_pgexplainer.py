@@ -1,10 +1,15 @@
 import argparse
 
-from common import add_dataset_arguments, add_wrapper_model_arguments, create_tgn_wrapper_from_args, parse_args
+import torch
+
+from CFTGNNExplainer.baseline.ttgnwrapper import TTGNWrapper
+from TTGN.utils.utils import get_neighbor_finder
+from common import add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args, parse_args
 
 from CFTGNNExplainer.sampling.embedding import StaticEmbedding
 from CFTGNNExplainer.baseline.ttgnbridge import TTGNBridge
 from CFTGNNExplainer.baseline.pgexplainer import TPGExplainer
+from TTGN.model.tgn import TGN
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('PGExplainer Baseline Training')
@@ -18,7 +23,34 @@ if __name__ == '__main__':
 
     args = parse_args(parser)
 
-    tgn_wrapper = create_tgn_wrapper_from_args(args)
+    dataset = create_dataset_from_args(args)
+
+    device = 'cpu'
+    if args.cuda:
+        device = 'cuda'
+
+    tgn = TGN(
+        neighbor_finder=get_neighbor_finder(dataset.to_data_object(), uniform=False),
+        node_features=dataset.node_features,
+        edge_features=dataset.edge_features,
+        device=torch.device(device),
+        use_memory=True,
+        memory_update_at_start=False,
+        memory_dimension=172,
+        embedding_module_type='graph_attention',
+        message_function='identity',
+        aggregator_type='last',
+        memory_updater_type='gru',
+        use_destination_embedding_in_message=False,
+        use_source_embedding_in_message=False,
+        dyrep=False,
+        n_neighbors=20
+    )
+
+    tgn.to(device)
+
+    tgn_wrapper = TTGNWrapper(tgn, dataset, num_hops=2, model_name=dataset.name, device=device, n_neighbors=20,
+                              batch_size=32, checkpoint_path=args.model)
 
     candidates_size = args.candidates_size
     bridge = TTGNBridge(tgn_wrapper, explanation_candidates_size=candidates_size)

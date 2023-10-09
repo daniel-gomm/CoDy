@@ -5,8 +5,9 @@ from typing import List
 import numpy as np
 import pandas as pd
 
+from CFTGNNExplainer.data.dataset import TrainTestDatasetParameters
 from CFTGNNExplainer.sampling.embedding import DynamicEmbedding, StaticEmbedding
-from CFTGNNExplainer.sampling.sampler import load_prediction_model, PretrainedEdgeSamplerParameters
+from CFTGNNExplainer.sampling.sampler import create_embedding_model, PretrainedEdgeSamplerParameters
 from common import (add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args,
                     create_tgn_wrapper_from_args, parse_args, get_event_ids_from_file)
 
@@ -67,10 +68,14 @@ if __name__ == '__main__':
                         help='Number of samples to draw in each sampling step')
     parser.add_argument('--candidates_size', type=int, default=50,
                         help='Number of candidates from which the samples are selected')
+    parser.add_argument('--number_of_explained_events', type=int, default=1000,
+                        help='Number of event ids to explain. Only has an effect if the explained_ids file has not '
+                             'been initialized yet')
 
     args = parse_args(parser)
 
-    dataset = create_dataset_from_args(args)
+    dataset = create_dataset_from_args(args, TrainTestDatasetParameters(0.2, 0.6, 0.8, args.number_of_explained_events,
+                                                                        500, 500))
 
     tgn_wrapper = create_tgn_wrapper_from_args(args, dataset)
 
@@ -83,8 +88,8 @@ if __name__ == '__main__':
             embedding = DynamicEmbedding(dataset, tgn_wrapper, embed_static_node_features=False)
         else:
             embedding = StaticEmbedding(dataset, tgn_wrapper)
-        pretrained_sampler_model = load_prediction_model(embedding.dimension, args.sampler_model_path,
-                                                         tgn_wrapper.device)
+
+        pretrained_sampler_model = create_embedding_model(embedding, args.sampler_model_path, tgn_wrapper.device)
         sampler_params = PretrainedEdgeSamplerParameters(pretrained_sampler_model, embedding,
                                                          predict_for_each_sample=args.predict_for_each_sample)
 

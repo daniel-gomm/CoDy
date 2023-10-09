@@ -354,7 +354,7 @@ class TGNWrapper(TGNNWrapper):
         val_memory_backup = self.model.memory.backup_memory()
 
         # ---Test---
-        self.model.embedding_module.neighbor_finder = full_neighborhood_finder
+        self.model.set_neighbor_finder(full_neighborhood_finder)
         test_ap, test_auc, test_acc = eval_edge_prediction(model=self.model,
                                                            negative_edge_sampler=test_random_sampler,
                                                            data=test_data,
