@@ -104,7 +104,8 @@ def compute_scores(tgn_bridge: TTGNBridge, base_events, children, target_event_i
         if child.P == 0:
             before_oracle_call = time.time_ns()
             with torch.no_grad():
-                subgraph_prediction, _ = tgn_bridge.predict(target_event_idx, edge_id_preserve_list=base_events + child.coalition)
+                subgraph_prediction, _ = tgn_bridge.predict(target_event_idx,
+                                                            edge_id_preserve_list=base_events + child.coalition)
             subgraph_prediction = subgraph_prediction.detach().cpu().item()
             oracle_call_time += time.time_ns() - before_oracle_call
             if original_prediction >= 0:
@@ -350,19 +351,28 @@ class TGNNExplainer(Explainer):
 
     def _get_candidate_weights(self, event_idx):
         candidate_events = self.tgnn_bridge.candidate_events
+
+        original_prediction, _ = self.tgnn_bridge.predict(event_idx,
+                                                          edge_id_preserve_list=((candidate_events +
+                                                                                 self.tgnn_bridge.base_events)))
+        original_prediction = original_prediction.detach().cpu().item()
+
         self.pg_explainer.explainer.eval()
         edge_weights = self.pg_explainer.get_event_scores(event_idx, candidate_events)
 
-        candidate_weights_dict = {
-            'candidate_events': torch.tensor(candidate_events, dtype=torch.int64, device=self.device),
-            'edge_weights': edge_weights,
-        }
-        original_prediction, _ = self.tgnn_bridge.predict(event_idx,
-                                                          edge_id_preserve_list=self.tgnn_bridge.candidate_events +
-                                                                                self.tgnn_bridge.base_events)
-        original_prediction = original_prediction.detach().cpu().item()
+        _, _ = self.tgnn_bridge.predict(event_idx,
+                                        candidate_event_ids=torch.tensor(candidate_events, dtype=torch.int64,
+                                                                         device=self.device),
+                                        edge_weights=edge_weights)
+
         e_idx_weight_dict = _agg_attention(self.tgnn_bridge.model.model)
-        edge_weights = np.array([e_idx_weight_dict[e_idx] for e_idx in candidate_events])
+        edge_weights = []
+        for e_idx in candidate_events:
+            if e_idx in e_idx_weight_dict.keys():
+                edge_weights.append(e_idx_weight_dict[e_idx])
+            else:
+                edge_weights.append(0.0)
+        edge_weights = np.array(edge_weights)
 
         candidate_initial_weights = {candidate_events[i]: edge_weights[i] for i in range(len(candidate_events))}
         return candidate_initial_weights, original_prediction
