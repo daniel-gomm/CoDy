@@ -280,4 +280,5 @@ class CFTGNNExplainer(Explainer):
             best_cf_example = find_best_non_counterfactual_example(root_node)
         self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
         self.tgnn_bridge.reset_model()
+        self.known_states = {}
         return best_cf_example.to_cf_example()
