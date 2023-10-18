@@ -13,7 +13,7 @@ RESULTS_DIR="$PARENT_DIR/resources/results"
 
 DATASET_NAMES=($(find "$PROCESSED_DATA_DIR" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;))
 
-EXPLAINER_TYPES=("pg_explainer" "tgnnexplainer" "greedy" "searching")
+EXPLAINER_TYPES=("pg_explainer" "tgnnexplainer" "greedy" "searching" "cftgnnexplainer")
 
 SAMPLER_TYPES=("random" "recent" "closest" "pretrained")
 

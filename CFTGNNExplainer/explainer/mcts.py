@@ -146,6 +146,9 @@ class MCTSTreeNode:
 
             # self.exploitation_score = max(0.0, np.average([child.exploitation_score for child in self.children
             #                                                if child.expanded]))
+            if self.exploitation_score == 0:
+                self.exploitation_score = max(0.0, np.average([child.exploitation_score for child in self.children
+                                                               if child.expanded]))
             pass
 
         self.number_of_selections += 1
@@ -184,10 +187,10 @@ class MCTSTreeNode:
 
 class CFTGNNExplainer(Explainer):
 
-    def __init__(self, tgnn_bridge: TGNNBridge, candidates_size: int = 75, sample_size: int = 10,
-                 sampling_strategy: str = 'recent', max_steps: int = 50, verbose: bool = False,
+    def __init__(self, tgnn_bridge: TGNNBridge, candidates_size: int = 75, sampling_strategy: str = 'recent',
+                 max_steps: int = 200, verbose: bool = False,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
-        super().__init__(tgnn_bridge, sampling_strategy, candidates_size=candidates_size, sample_size=sample_size,
+        super().__init__(tgnn_bridge, sampling_strategy, candidates_size=candidates_size, sample_size=candidates_size,
                          verbose=verbose, pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.max_steps = max_steps
         self.known_states = {}

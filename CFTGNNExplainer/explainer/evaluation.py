@@ -12,6 +12,8 @@ from CFTGNNExplainer.explainer.greedy import GreedyCFExplainer, is_prediction_mo
 from CFTGNNExplainer.sampling.sampler import EdgeSampler, PretrainedEdgeSamplerParameters
 from CFTGNNExplainer.explainer.searching import (TreeNode, select_best_cf_example, find_best_non_counterfactual_example,
                                                  SearchingCFExplainer)
+from CFTGNNExplainer.explainer.mcts import CFTGNNExplainer, MCTSTreeNode
+from CFTGNNExplainer.explainer.mcts import find_best_non_counterfactual_example as find_best_non_cf_example
 
 LAST_PREDICTION_MEMORY_LABEL = 'last_original_score'
 NEW_PREDICTION_MEMORY_LABEL = 'new_original_score'
@@ -297,4 +299,148 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
                                                           statistics=statistics)
         if self.verbose:
             self.logger.info(f'Final explanation result: {str(eval_cf_example)}\n')
+        return eval_cf_example
+
+
+class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
+
+    def __init__(self, tgnn_bridge: TGNNBridge, sampling_strategy: str = 'recent', max_steps: int = 200,
+                 candidates_size: int = 75, verbose: bool = False,
+                 pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
+        CFTGNNExplainer.__init__(self, tgnn_bridge=tgnn_bridge, sampling_strategy=sampling_strategy,
+                                 candidates_size=candidates_size, verbose=verbose, max_steps=max_steps,
+                                 pretrained_sampler_parameters=pretrained_sampler_parameters)
+        EvaluationExplainer.__init__(self, tgnn_bridge=tgnn_bridge, sampling_strategy=sampling_strategy,
+                                     candidates_size=candidates_size, sample_size=candidates_size, verbose=verbose,
+                                     pretrained_sampler_parameters=pretrained_sampler_parameters)
+        self.last_min_id = 0
+
+    def _run_node_expansion(self, explained_edge_id: int, node_to_expand: MCTSTreeNode, sampler: EdgeSampler):
+        edge_ids_to_exclude = []
+        node = node_to_expand
+        while node.parent is not None:
+            edge_ids_to_exclude.append(node.edge_id)
+            node = node.parent
+
+        oracle_call_start_time = time.time_ns()
+        prediction = self.calculate_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID],
+                                                        cf_example_events=edge_ids_to_exclude,
+                                                        explained_event_id=explained_edge_id,
+                                                        candidate_event_id=node_to_expand.edge_id,
+                                                        memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
+        oracle_call_time = time.time_ns() - oracle_call_start_time
+        self._expand_node(explained_edge_id, node_to_expand, prediction, sampler)
+        return oracle_call_time
+
+    def _expand_node(self, explained_edge_id: int, node_to_expand: MCTSTreeNode, prediction: float,
+                     sampler: EdgeSampler):
+        node_to_expand.expand(prediction)
+
+        self.known_states[node_to_expand.hash()] = prediction
+
+        if node_to_expand.is_counterfactual:
+            return
+
+        edge_ids_to_exclude = []
+        node = node_to_expand
+        while node.parent is not None:
+            edge_ids_to_exclude.append(node.edge_id)
+            node = node.parent
+
+        ranked_edge_ids = sampler.rank_subgraph(base_event_id=explained_edge_id,
+                                                excluded_events=np.array(edge_ids_to_exclude))
+
+        for rank, edge_id in enumerate(ranked_edge_ids):
+            new_child = MCTSTreeNode(edge_id, node_to_expand, node_to_expand.original_prediction, rank)
+            node_to_expand.children.append(new_child)
+            if new_child.hash() in self.known_states.keys():
+                self._expand_node(explained_edge_id, new_child, self.known_states[new_child.hash()], sampler)
+
+    def evaluate_explanation(self, explained_event_id: int, original_prediction: float) -> (
+            EvaluationCounterFactualExample):
+        if original_prediction is None:
+            original_prediction, sampler = self.initialize_explanation(explained_event_id)
+        else:
+            sampler = self.initialize_explanation_evaluation(explained_event_id, original_prediction)
+        timings = {}
+        statistics = {}
+        oracle_calls = 0
+        oracle_call_time = 0
+        encountered_cf_examples = 0
+        start_time = time.time_ns()
+
+        best_cf_example = None
+        best_cf_example_step = 0
+        max_depth = sys.maxsize
+        root_node = MCTSTreeNode(explained_event_id, parent=None, sampling_rank=0,
+                                 original_prediction=original_prediction)
+        root_node.prediction = original_prediction
+        step = 0
+        init_end_time = time.time_ns()
+        timings['init_duration'] = init_end_time - start_time
+        while step <= self.max_steps:
+            node_to_expand = None
+            while node_to_expand is None:
+                node_to_expand = root_node.select_next_leaf(max_depth)
+                if node_to_expand.depth > max_depth:
+                    # Should not happen. TODO: Check if it is save to remove this if-condition
+                    node_to_expand.expansion_backpropagation()
+                    node_to_expand = None
+                    continue
+                if node_to_expand == root_node and root_node.expanded:
+                    break  # No nodes are selectable, meaning that we can conclude the search
+                if node_to_expand.hash() in self.known_states.keys():
+                    # Already encountered this combination -> select new combination of events instead
+                    self._expand_node(explained_event_id, node_to_expand, self.known_states[node_to_expand.hash()],
+                                      sampler)
+                    node_to_expand = None
+            if node_to_expand == root_node and root_node.expanded:
+                if self.verbose:
+                    self.logger.info('Search Tree is fully expanded. Concluding search.')
+                break  # No nodes are selectable, meaning that we can conclude the search
+            if self.verbose:
+                self.logger.info(f'Selected node {node_to_expand.edge_id} at depth {node_to_expand.depth}, hash: '
+                                 f'{node_to_expand.hash()}')
+            oracle_call_time += self._run_node_expansion(explained_event_id, node_to_expand, sampler)
+            oracle_calls += 1
+            if node_to_expand.is_counterfactual:
+                if best_cf_example is None or best_cf_example.depth > node_to_expand.depth:
+                    best_cf_example = node_to_expand
+                    best_cf_example_step = step
+                    encountered_cf_examples += 1
+                elif (best_cf_example.depth == node_to_expand.depth and
+                      best_cf_example.exploitation_score < node_to_expand.exploitation_score):
+                    best_cf_example = node_to_expand
+                    best_cf_example_step = step
+                    encountered_cf_examples += 1
+                max_depth = best_cf_example.depth
+                if self.verbose:
+                    self.logger.info(f'Found counterfactual explanation: '
+                                     + str(node_to_expand.to_cf_example()))
+            step += 1
+        if best_cf_example is None:
+            best_cf_example = find_best_non_cf_example(root_node)
+            best_cf_example_step = step
+        self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
+        self.tgnn_bridge.reset_model()
+        self.known_states = {}
+        end_time = time.time_ns()
+        timings['oracle_call_duration'] = oracle_call_time
+        timings['explanation_duration'] = end_time - start_time - oracle_call_time
+        timings['total_duration'] = end_time - start_time
+        statistics['oracle_calls'] = oracle_calls
+        statistics['candidate_size'] = len(sampler.subgraph)
+        statistics['candidates'] = sampler.subgraph[COL_ID].to_list()
+        statistics['cf_example_step'] = best_cf_example_step
+        statistics['encountered_cf_examples'] = encountered_cf_examples
+        cf_ex = best_cf_example.to_cf_example()
+        eval_cf_example = EvaluationCounterFactualExample(explained_event_id=explained_event_id,
+                                                          original_prediction=original_prediction,
+                                                          counterfactual_prediction=cf_ex.counterfactual_prediction,
+                                                          achieves_counterfactual_explanation=
+                                                          cf_ex.achieves_counterfactual_explanation,
+                                                          event_ids=cf_ex.event_ids,
+                                                          event_importances=cf_ex.event_importances,
+                                                          timings=timings,
+                                                          statistics=statistics)
         return eval_cf_example

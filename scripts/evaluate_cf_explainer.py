@@ -13,7 +13,7 @@ from common import (add_dataset_arguments, add_wrapper_model_arguments, create_d
 
 from CFTGNNExplainer.connector.bridge import DynamicTGNNBridge
 from CFTGNNExplainer.explainer.evaluation import EvaluationExplainer, EvaluationCounterFactualExample, \
-    EvaluationGreedyCFExplainer, EvaluationSearchingCFExplainer
+    EvaluationGreedyCFExplainer, EvaluationSearchingCFExplainer, EvaluationCFTGNNExplainer
 from CFTGNNExplainer.utils import ProgressBar
 
 logging.basicConfig(level=logging.INFO)
@@ -28,8 +28,11 @@ def evaluate(evaluated_explainer: EvaluationExplainer, explained_event_ids: np.n
 
     for event_id in explained_event_ids:
         progress_bar.update_postfix(f'Generating original score for event {event_id}')
-        original_prediction = evaluated_explainer.get_evaluation_original_prediction(event_id, last_event_id)
-        evaluated_explainer.tgnn_bridge.reset_model()
+        if type(evaluated_explainer) is not EvaluationCFTGNNExplainer:
+            original_prediction = evaluated_explainer.get_evaluation_original_prediction(event_id, last_event_id)
+            evaluated_explainer.tgnn_bridge.reset_model()
+        else:
+            original_prediction = None
         progress_bar.update_postfix(f'Generating explanation for event {event_id}')
         explanation = evaluated_explainer.evaluate_explanation(event_id, original_prediction)
         explanation_list.append(explanation)
@@ -52,10 +55,14 @@ if __name__ == '__main__':
     add_wrapper_model_arguments(parser)
     parser.add_argument('--explained_ids', required=True, type=str,
                         help='Path to the file containing all the event ids that should be explained')
+    parser.add_argument('--wrong_predictions_only', action='store_true',
+                        help='Provide if evaluation should focus on wrong predictions only')
+    parser.add_argument('--debug', action='store_true',
+                        help='Add this flag for more detailed debug outputs')
     parser.add_argument('-r', '--results', required=True, type=str,
                         help='Filepath for the evaluation results')
     parser.add_argument('--explainer', required=True, type=str, help='Which explainer to evaluate',
-                        choices=['greedy', 'searching'])
+                        choices=['greedy', 'searching', 'cftgnnexplainer'])
     parser.add_argument('--sampler', required=True, default='recent', type=str,
                         choices=['random', 'recent', 'closest', 'pretrained'])
     parser.add_argument('--sampler_model_path', default=None, type=str,
@@ -79,7 +86,8 @@ if __name__ == '__main__':
 
     tgn_wrapper = create_tgn_wrapper_from_args(args, dataset)
 
-    event_ids_to_explain = get_event_ids_from_file(args.explained_ids, dataset, logger)
+    event_ids_to_explain = get_event_ids_from_file(args.explained_ids, dataset, logger, args.wrong_predictions_only,
+                                                   tgn_wrapper)
 
     sampler_params = None
 
@@ -97,12 +105,17 @@ if __name__ == '__main__':
         case 'greedy':
             explainer = EvaluationGreedyCFExplainer(DynamicTGNNBridge(tgn_wrapper), sampling_strategy=args.sampler,
                                                     candidates_size=args.candidates_size, sample_size=args.sample_size,
-                                                    pretrained_sampler_parameters=sampler_params)
+                                                    pretrained_sampler_parameters=sampler_params, verbose=args.debug)
         case 'searching':
             explainer = EvaluationSearchingCFExplainer(DynamicTGNNBridge(tgn_wrapper), sampling_strategy=args.sampler,
                                                        candidates_size=args.candidates_size,
-                                                       sample_size=args.sample_size,
+                                                       sample_size=args.sample_size, verbose=args.debug,
                                                        pretrained_sampler_parameters=sampler_params)
+        case 'cftgnnexplainer':
+            explainer = EvaluationCFTGNNExplainer(DynamicTGNNBridge(tgn_wrapper), sampling_strategy=args.sampler,
+                                                  candidates_size=args.candidates_size,
+                                                  max_steps=200, verbose=args.debug,
+                                                  pretrained_sampler_parameters=sampler_params)
         case _:
             raise NotImplementedError
 
