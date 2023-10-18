@@ -11,7 +11,7 @@ train_tgn() {
     echo "Created new directory for the final model and model checkpoints for the $1 dataset at $MODEL_PATH"
   fi
   echo "Training TGN model for the $1 dataset..."
-  python "$SCRIPT_DIR/train_tgnn.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model_path "$MODEL_PATH" -e 30
+  python "$SCRIPT_DIR/train_tgnn.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model_path "$MODEL_PATH/" -e 30
 }
 
 
