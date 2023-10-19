@@ -86,7 +86,7 @@ class TGNWrapper(TGNNWrapper):
     #  Wrapper for 'Temporal Graph Networks' model from https://github.com/twitter-research/tgn
 
     def __init__(self, model: TGN, dataset: ContinuousTimeDynamicGraphDataset, num_hops: int, model_name: str,
-                 device: str = 'cpu', n_neighbors: int = 20, batch_size: int = 128, checkpoint_path: str = None):
+                 device: str = 'cpu', n_neighbors: int = 20, batch_size: int = 32, checkpoint_path: str = None):
         super().__init__(model=model, dataset=dataset, num_hops=num_hops, model_name=model_name, device=device)
         # Set time statistics values
         model.mean_time_shift_src, model.std_time_shift_src, model.mean_time_shift_dst, model.std_time_shift_dst = \
