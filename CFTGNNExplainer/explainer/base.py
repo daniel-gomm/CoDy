@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from typing import List
 
@@ -9,7 +11,7 @@ from CFTGNNExplainer.connector.bridge import TGNNBridge
 from CFTGNNExplainer.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from CFTGNNExplainer.data.subgraph import SubgraphGenerator
 from CFTGNNExplainer.sampling.sampler import EdgeSampler, RandomEdgeSampler, RecentEdgeSampler, ClosestEdgeSampler, \
-    PretrainedEdgeSampler, PretrainedEdgeSamplerParameters
+    PretrainedEdgeSampler, PretrainedEdgeSamplerParameters, OneBestEdgeSampler
 
 
 @dataclass
@@ -34,6 +36,116 @@ class CounterFactualExample:
         if len(self.event_importances) == 0:
             return np.ndarray([])
         return self.get_absolute_importances() / self.event_importances[-1]
+
+
+class TreeNode:
+    parent: TreeNode
+    children: List[TreeNode]
+    is_counterfactual: bool
+    edge_id: int
+    prediction: float | None
+    original_prediction: float
+    expanded: bool
+    max_expansion_reached: bool
+    exploitation_score: float
+
+    def __init__(self, edge_id: int, parent: TreeNode | None, original_prediction: float):
+        self.edge_id = edge_id
+        self.parent = parent
+        self.original_prediction = original_prediction
+        self.prediction = None
+        self.is_counterfactual = False
+        self.expanded = False
+        self.max_expansion_reached = False
+        self.children = []
+        self.exploitation_score = 0.0
+
+    def _check_max_expanded(self):
+        """
+        Recursively check if the node is already maximally expanded, meaning that no further expansions of its child
+        nodes are possible
+        """
+        if not self.max_expansion_reached:
+            for child in self.children:
+                if not child.max_expansion_reached or child.expanded:
+                    return
+            self.max_expansion_reached = True
+            if self.parent is not None:
+                self.parent._check_max_expanded()
+
+    def is_leaf(self) -> bool:
+        """
+        Check if the node is a leaf node, meaning that it has no children
+        """
+        return len(self.children) == 0
+
+    def expand(self, prediction: float, children: List[TreeNode]):
+        """
+        Expand the node
+        @param prediction: The prediction achieved when this tree node is included in the counterfactual example
+        @param children: List of children added in the expansion
+        @return: None
+        """
+        self.prediction = prediction
+        self.children.extend(children)
+        self.exploitation_score = max(0.0, (calculate_prediction_delta(self.original_prediction, self.prediction) /
+                                            abs(self.original_prediction)))
+        self.expanded = True
+        if self.original_prediction * self.prediction < 0:
+            self.is_counterfactual = True
+            self.max_expansion_reached = True
+        self.expansion_backpropagation()
+
+    def select_next_leaf(self, max_depth: int) -> TreeNode:
+        """
+        Select the next leaf node for expansion
+        @param max_depth: Maximum depth at which to search for leaf nodes
+        @return: Leaf node to expand
+        """
+        raise NotImplementedError
+
+    def expansion_backpropagation(self):
+        """
+        Propagate the information that a node is selected backwards and update scores
+        """
+        raise NotImplementedError
+
+    def to_cf_example(self) -> CounterFactualExample:
+        """
+        Returns an instance of CounterFactualExample for the current node by aggregating information from parents
+        """
+        cf_events = []
+        cf_event_importances = []
+        node = self
+        while node.parent is not None:
+            cf_events.append(node.edge_id)
+            cf_event_importances.append(calculate_prediction_delta(self.original_prediction, node.prediction))
+            node = node.parent
+        cf_events.reverse()
+        cf_event_importances.reverse()
+        return CounterFactualExample(explained_event_id=node.edge_id,
+                                     original_prediction=self.original_prediction,
+                                     counterfactual_prediction=self.prediction,
+                                     achieves_counterfactual_explanation=self.is_counterfactual,
+                                     event_ids=np.array(cf_events),
+                                     event_importances=np.array(cf_event_importances))
+
+    def get_parent_ids(self):
+        parent_ids = []
+        node = self
+        while node.parent is not None:
+            parent_ids.append(node.edge_id)
+            node = node.parent
+        return parent_ids
+
+    def hash(self):
+        edge_ids = []
+        node = self
+        while node.parent is not None:
+            edge_ids.append(node.edge_id)
+            node = node.parent
+        sorted_edge_ids = sorted(edge_ids)
+        return '-'.join(map(str, sorted_edge_ids))
 
 
 def calculate_prediction_delta(original_prediction: float, prediction_to_assess: float) -> float:
@@ -75,6 +187,8 @@ class Explainer:
             assert self.pretrained_sampler_parameters is not None
             return PretrainedEdgeSampler(subgraph, self.pretrained_sampler_parameters, explained_event_id,
                                          original_prediction)
+        elif self.sampling_strategy == '1-best':
+            return OneBestEdgeSampler(subgraph)
         else:
             raise NotImplementedError(f'No sampling implemented for sampling strategy {self.sampling_strategy}')
 

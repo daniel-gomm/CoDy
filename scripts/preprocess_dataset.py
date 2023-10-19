@@ -29,6 +29,8 @@ def _reindex_vertices(dataset: pd.DataFrame, bipartite: bool) -> pd.DataFrame:
     if bipartite:
         assert (dataset[COL_NODE_I].max() - dataset[COL_NODE_I].min() + 1 == len(dataset[COL_NODE_I].unique()))
         assert (dataset[COL_NODE_U].max() - dataset[COL_NODE_U].min() + 1 == len(dataset[COL_NODE_U].unique()))
+        dataset_copy[COL_NODE_I] = dataset_copy[COL_NODE_I] - dataset_copy[COL_NODE_I].min()  # Make zero indexed
+        dataset_copy[COL_NODE_U] = dataset_copy[COL_NODE_U] - dataset_copy[COL_NODE_U].min()
         dataset_copy[COL_NODE_I] += dataset[COL_NODE_U].max() + 1
 
     dataset_copy[COL_NODE_I] += 1

@@ -129,6 +129,9 @@ class TTGNWrapper(TGNNWrapper):
         base_events = list(filter(lambda x: x not in set(candidate_events), unique_edge_ids))
         source_nodes, target_nodes, timestamps, event_ids = self.extract_event_information(event_id)
 
+        if event_id in candidate_events:
+            candidate_events.remove(event_id)
+
         original_score, _ = self.model.compute_edge_probabilities(source_nodes=source_nodes,
                                                                   destination_nodes=target_nodes,
                                                                   negative_nodes=None,

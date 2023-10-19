@@ -99,12 +99,55 @@ def create_tgn_wrapper_from_args(args: Namespace, dataset: ContinuousTimeDynamic
 
 
 def get_event_ids_from_file(event_ids_filepath: str | None, dataset: ContinuousTimeDynamicGraphDataset,
-                            logger: logging.Logger):
+                            logger: logging.Logger, wrong_predictions_only: bool = False,
+                            tgn_wrapper: TGNWrapper = None):
     if os.path.exists(event_ids_filepath):
         return np.load(event_ids_filepath)
     else:
         logger.info('No event ids to explain provided. Generating new ones...')
-        event_ids_to_explain = dataset.extract_random_event_ids(section='train')
-        event_ids_to_explain = np.array(event_ids_to_explain)
+        if wrong_predictions_only:
+            logger.info('Generating sample consisting of wrong predictions only. This can take a while...')
+            assert tgn_wrapper is not None, 'Cannot sample wrong predictions if model is not provided'
+            tgn_wrapper.reset_model()
+            event_ids_to_explain = sample_wrong_predictions(tgn_wrapper)
+        else:
+            event_ids_to_explain = dataset.extract_random_event_ids(section='train')
+            event_ids_to_explain = np.array(event_ids_to_explain)
         np.save(event_ids_filepath, event_ids_to_explain)
         return event_ids_to_explain
+
+
+def sample_wrong_predictions(tgn_wrapper: TGNWrapper):
+    tgn_wrapper.activate_evaluation_mode()
+    max_event_id = np.max(tgn_wrapper.dataset.edge_ids)
+    batch_data = tgn_wrapper.dataset.get_batch_data(0, max_event_id - 1)
+    batch_id = 0
+    number_of_batches = int(np.ceil(len(batch_data.source_node_ids) / tgn_wrapper.batch_size))
+    all_predictions = []
+    event_ids = []
+    with torch.no_grad():
+        for _ in range(number_of_batches):
+            batch_start = batch_id * tgn_wrapper.batch_size
+            batch_end = min((batch_id + 1) * tgn_wrapper.batch_size, len(batch_data.source_node_ids))
+            predictions, _ = tgn_wrapper.compute_edge_probabilities(
+                source_nodes=batch_data.source_node_ids[batch_start:batch_end],
+                target_nodes=batch_data.target_node_ids[batch_start:batch_end],
+                edge_timestamps=batch_data.timestamps[batch_start:batch_end],
+                edge_ids=batch_data.edge_ids[batch_start:batch_end],
+                result_as_logit=True)
+            predictions = predictions.detach().cpu().numpy()
+            all_predictions.append(predictions)
+            event_ids.append(batch_data.edge_ids[batch_start:batch_end])
+            tgn_wrapper.model.memory.detach_memory()
+            batch_id += 1
+    all_predictions = np.concatenate(all_predictions)
+    event_ids = np.concatenate(event_ids)
+
+    results = pd.DataFrame({'edge_ids': event_ids.flatten(), 'predictions': all_predictions.flatten()})
+    wrong_results = results[results['predictions'] < 0]
+    filtered_results = wrong_results[
+        wrong_results['edge_ids'] > int(tgn_wrapper.dataset.parameters.training_start * max_event_id)]
+    filtered_results = filtered_results[
+        filtered_results['edge_ids'] < int(tgn_wrapper.dataset.parameters.training_end * max_event_id)]
+    sampled_results = filtered_results.sample(tgn_wrapper.dataset.parameters.train_items)
+    return sampled_results.sort_values(by='edge_ids')['edge_ids'].to_numpy()

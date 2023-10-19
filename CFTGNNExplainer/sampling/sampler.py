@@ -46,39 +46,40 @@ class EdgeSampler:
 
     def sample(self, base_event_id: int, excluded_events: np.ndarray, size: int,
                known_cf_examples: List[np.ndarray] | None = None) -> np.ndarray:
+        ranked_subgraph = self.rank_subgraph(base_event_id, excluded_events, known_cf_examples)
+        if len(ranked_subgraph) < size:
+            return ranked_subgraph
+        return ranked_subgraph[:size]
+
+    def rank_subgraph(self, base_event_id: int, excluded_events: np.ndarray,
+                      known_cf_examples: List[np.ndarray] | None = None):
         raise NotImplementedError
 
 
 class RandomEdgeSampler(EdgeSampler):
 
-    def sample(self, base_event_id: int, excluded_events: np.ndarray, size: int,
-               known_cf_examples: List[np.ndarray] | None = None) -> np.ndarray:
+    def rank_subgraph(self, base_event_id: int, excluded_events: np.ndarray,
+                      known_cf_examples: List[np.ndarray] | None = None):
         filtered_subgraph = filter_subgraph(base_event_id, excluded_events, self.subgraph, known_cf_examples)
-        if len(filtered_subgraph) < size:
-            return filtered_subgraph[COL_ID].to_numpy()
-        return filtered_subgraph.sample(n=size, replace=False)[COL_ID].to_numpy()
+        return filtered_subgraph.sample(frac=1)[COL_ID].to_numpy()
 
 
 class RecentEdgeSampler(EdgeSampler):
 
-    def sample(self, base_event_id: int, excluded_events: np.ndarray, size: int,
-               known_cf_examples: List[np.ndarray] | None = None) -> np.ndarray:
+    def rank_subgraph(self, base_event_id: int, excluded_events: np.ndarray,
+                      known_cf_examples: List[np.ndarray] | None = None):
         filtered_subgraph = filter_subgraph(base_event_id, excluded_events, self.subgraph, known_cf_examples)
-        if len(filtered_subgraph) < size:
-            return filtered_subgraph[COL_ID].to_numpy()
-        return filtered_subgraph[COL_ID].to_numpy()[-size:]
+        return filtered_subgraph[COL_ID].to_numpy()[::-1]
 
 
 class ClosestEdgeSampler(EdgeSampler):
 
-    def sample(self, base_event_id: int, excluded_events: np.ndarray, size: int,
-               known_cf_examples: List[np.ndarray] | None = None) -> np.ndarray:
+    def rank_subgraph(self, base_event_id: int, excluded_events: np.ndarray,
+                      known_cf_examples: List[np.ndarray] | None = None):
         filtered_subgraph = filter_subgraph(base_event_id, excluded_events, self.subgraph, known_cf_examples)
-        if len(filtered_subgraph) < size:
-            return filtered_subgraph[COL_ID].to_numpy()
         sorted_subgraph = filtered_subgraph.sort_values(by=[COL_TIMESTAMP, COL_SUBGRAPH_DISTANCE],
                                                         ascending=[True, False])
-        return sorted_subgraph[COL_ID].to_numpy()[:size]
+        return sorted_subgraph[COL_ID].to_numpy()
 
 
 @dataclass
@@ -109,18 +110,32 @@ class PretrainedEdgeSampler(EdgeSampler):
         predictions = torch.nn.functional.cosine_similarity(explained_edge_embeddings, excluded_edges_embeddings)
         return predictions.detach().cpu().flatten().numpy()
 
-    def sample(self, base_event_id: int, excluded_events: np.ndarray, size: int,
-               known_cf_examples: List[np.ndarray] | None = None) -> np.ndarray:
+    def rank_subgraph(self, base_event_id: int, excluded_events: np.ndarray,
+                      known_cf_examples: List[np.ndarray] | None = None):
         filtered_subgraph = filter_subgraph(base_event_id, excluded_events, self.subgraph, known_cf_examples)
         event_ids = filtered_subgraph[COL_ID].to_numpy()
-        if len(event_ids) < size:
-            return event_ids
         if self.initial_weights is None:
             weights = self._embeddings_to_weights(event_ids, base_event_id)
         else:
             subgraph_without_base_event = self.subgraph[self.subgraph[COL_ID] != base_event_id]
             edge_mask = subgraph_without_base_event[COL_ID].isin(event_ids).to_numpy()
             weights = self.initial_weights[edge_mask]
-        filtered_subgraph['weights'] = weights
-        sorted_subgraph = filtered_subgraph.sort_values(by='weights', ascending=self.positive_original_prediction)
-        return sorted_subgraph[COL_ID].to_numpy()[:size]
+        filtered_subgraph['weight'] = weights
+        sorted_subgraph = filtered_subgraph.sort_values(by='weight', ascending=self.positive_original_prediction)
+        return sorted_subgraph[COL_ID].to_numpy()
+
+
+class OneBestEdgeSampler(EdgeSampler):
+
+    def __init__(self, subgraph: pd.DataFrame):
+        super().__init__(subgraph)
+        self.subgraph['weight'] = 0
+
+    def set_event_weight(self, event_id: int, weight: float):
+        self.subgraph.loc[self.subgraph[COL_ID] == event_id, 'weight'] = weight
+
+    def rank_subgraph(self, base_event_id: int, excluded_events: np.ndarray,
+                      known_cf_examples: List[np.ndarray] | None = None):
+        filtered_subgraph = filter_subgraph(base_event_id, excluded_events, self.subgraph, known_cf_examples)
+        sorted_subgraph = filtered_subgraph.sort_values(by='weight', ascending=False)
+        return sorted_subgraph[COL_ID].to_numpy()
