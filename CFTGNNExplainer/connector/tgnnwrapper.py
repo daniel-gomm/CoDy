@@ -1,7 +1,7 @@
 import torch
 import logging
 import numpy as np
-from CFTGNNExplainer.data.dataset import ContinuousTimeDynamicGraphDataset, BatchData
+from CFTGNNExplainer.data import ContinuousTimeDynamicGraphDataset, BatchData
 from CFTGNNExplainer.utils import ProgressBar
 
 

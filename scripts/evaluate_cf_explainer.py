@@ -5,7 +5,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 
-from CFTGNNExplainer.data.dataset import TrainTestDatasetParameters
+from CFTGNNExplainer.data import TrainTestDatasetParameters
 from CFTGNNExplainer.sampling.embedding import DynamicEmbedding, StaticEmbedding
 from CFTGNNExplainer.sampling.sampler import create_embedding_model, PretrainedEdgeSamplerParameters
 from common import (add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args,

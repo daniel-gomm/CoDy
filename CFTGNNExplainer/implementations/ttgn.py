@@ -8,7 +8,7 @@ from TTGN.model.tgn import TGN
 
 from CFTGNNExplainer.connector.tgnnwrapper import TGNNWrapper
 from CFTGNNExplainer.connector.bridge import TGNNBridge
-from CFTGNNExplainer.data.dataset import ContinuousTimeDynamicGraphDataset, BatchData
+from CFTGNNExplainer.data import ContinuousTimeDynamicGraphDataset, BatchData
 from TTGN.utils.data_processing import compute_time_statistics
 from TTGN.utils.utils import NeighborFinder
 

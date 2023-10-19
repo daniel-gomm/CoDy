@@ -8,8 +8,8 @@ import numpy as np
 import pandas as pd
 import torch
 
-from CFTGNNExplainer.implementations.tgn import TGNWrapper
-from CFTGNNExplainer.data.dataset import ContinuousTimeDynamicGraphDataset, TrainTestDatasetParameters
+from CFTGNNExplainer.implementations.tgn import TGNWrapper, to_data_object
+from CFTGNNExplainer.data import ContinuousTimeDynamicGraphDataset, TrainTestDatasetParameters
 from TGN.model.tgn import TGN
 from TGN.utils.utils import get_neighbor_finder
 
@@ -75,7 +75,7 @@ def create_tgn_wrapper_from_args(args: Namespace, dataset: ContinuousTimeDynamic
         device = 'cuda'
 
     tgn = TGN(
-        neighbor_finder=get_neighbor_finder(dataset.to_data_object(), uniform=False),
+        neighbor_finder=get_neighbor_finder(to_data_object(dataset), uniform=False),
         node_features=dataset.node_features,
         edge_features=dataset.edge_features,
         device=torch.device(device),

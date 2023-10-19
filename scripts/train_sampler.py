@@ -17,7 +17,7 @@ from common import (create_dataset_from_args, create_tgn_wrapper_from_args, add_
 
 from CFTGNNExplainer.implementations.tgn import TGNBridge
 from CFTGNNExplainer.constants import EXPLAINED_EVENT_MEMORY_LABEL, CUR_IT_MIN_EVENT_MEM_LBL, COL_ID
-from CFTGNNExplainer.data.dataset import TrainTestDatasetParameters
+from CFTGNNExplainer.data import TrainTestDatasetParameters
 from CFTGNNExplainer.explainer.evaluation import EvaluationExplainer
 from CFTGNNExplainer.explainer.base import calculate_prediction_delta
 from CFTGNNExplainer.sampling.embedding import Embedding, DynamicEmbedding, StaticEmbedding

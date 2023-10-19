@@ -8,7 +8,7 @@ import time
 from CFTGNNExplainer.connector.bridge import TGNNBridge
 from CFTGNNExplainer.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample
-from CFTGNNExplainer.explainer.greedy import GreedyCFExplainer, is_prediction_most_shifted, GreedyTreeNode
+from CFTGNNExplainer.explainer.greedy import GreedyCFExplainer, GreedyTreeNode
 from CFTGNNExplainer.sampling.sampler import EdgeSampler, PretrainedEdgeSamplerParameters, OneBestEdgeSampler
 from CFTGNNExplainer.explainer.searching import (BatchSearchTreeNode, select_best_cf_example,
                                                  find_best_non_counterfactual_example, SearchingCFExplainer)
