@@ -108,7 +108,6 @@ class GreedyCFExplainer(Explainer):
                                                                 memory_label=CUR_IT_MIN_EVENT_MEM_LBL)
                 child_node = GreedyTreeNode(candidate_event_id, parent=node_to_expand,
                                             original_prediction=original_prediction, prediction=prediction)
-                self.logger.info(f'Explore {child_node.edge_id}, prediction {prediction}, hash {child_node.hash()}')
                 node_to_expand.children.append(child_node)
                 if child_node.is_counterfactual:
                     if best_cf_example is None:
