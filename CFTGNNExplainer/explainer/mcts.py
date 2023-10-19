@@ -5,7 +5,7 @@ from typing import List
 
 import numpy as np
 
-from CFTGNNExplainer.connector.bridge import TGNNBridge
+from CFTGNNExplainer.connector import TGNNBridge
 from CFTGNNExplainer.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample, calculate_prediction_delta, TreeNode
 from CFTGNNExplainer.sampling.sampler import PretrainedEdgeSamplerParameters, EdgeSampler, OneBestEdgeSampler

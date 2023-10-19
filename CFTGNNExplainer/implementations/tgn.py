@@ -7,8 +7,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from CFTGNNExplainer.connector.bridge import TGNNBridge
-from CFTGNNExplainer.connector.tgnnwrapper import TGNNWrapper
+from CFTGNNExplainer.connector import TGNNWrapper, TGNNBridge
 from CFTGNNExplainer.constants import COL_TIMESTAMP, COL_NODE_I, COL_NODE_U
 from CFTGNNExplainer.data import BatchData, ContinuousTimeDynamicGraphDataset
 from CFTGNNExplainer.utils import ProgressBar, construct_model_path

@@ -6,8 +6,7 @@ import torch
 from CFTGNNExplainer.utils import ProgressBar
 from TTGN.model.tgn import TGN
 
-from CFTGNNExplainer.connector.tgnnwrapper import TGNNWrapper
-from CFTGNNExplainer.connector.bridge import TGNNBridge
+from CFTGNNExplainer.connector import TGNNWrapper, TGNNBridge
 from CFTGNNExplainer.data import ContinuousTimeDynamicGraphDataset, BatchData
 from TTGN.utils.data_processing import compute_time_statistics
 from TTGN.utils.utils import NeighborFinder

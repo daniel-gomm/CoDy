@@ -6,21 +6,6 @@ from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample, cal
 from CFTGNNExplainer.sampling.sampler import OneBestEdgeSampler
 
 
-def is_prediction_most_shifted(original_prediction: float, prediction_to_assess: float, previous_delta: float) \
-        -> (bool, float):
-    """
-    Check if the assessed prediction is the most shifted prediction or not
-    @param original_prediction: Original prediction
-    @param prediction_to_assess: Prediction to assess
-    @param previous_delta: The largest previously encountered delta
-    @return: (Boolean whether it is most shifted, Delta between prediction and original prediction)
-    """
-    delta = calculate_prediction_delta(original_prediction, prediction_to_assess)
-    if previous_delta < delta:
-        return True, delta
-    return False, delta
-
-
 class GreedyTreeNode(TreeNode):
 
     def __init__(self, edge_id: int, parent: TreeNode | None, original_prediction: float, prediction: float):

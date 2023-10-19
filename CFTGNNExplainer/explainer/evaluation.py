@@ -5,7 +5,7 @@ from typing import Dict, List
 import numpy as np
 import time
 
-from CFTGNNExplainer.connector.bridge import TGNNBridge
+from CFTGNNExplainer.connector import TGNNBridge
 from CFTGNNExplainer.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample
 from CFTGNNExplainer.explainer.greedy import GreedyCFExplainer, GreedyTreeNode
