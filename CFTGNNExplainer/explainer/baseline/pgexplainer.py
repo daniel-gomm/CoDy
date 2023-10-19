@@ -5,7 +5,7 @@ import numpy as np
 import time
 
 from CFTGNNExplainer.sampling.embedding import Embedding
-from CFTGNNExplainer.baseline.ttgnbridge import TTGNBridge
+from CFTGNNExplainer.implementations.ttgn import TTGNBridge
 from CFTGNNExplainer.explainer.base import Explainer
 
 import torch.nn as nn

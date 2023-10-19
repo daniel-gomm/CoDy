@@ -2,13 +2,12 @@ import argparse
 
 import torch
 
-from CFTGNNExplainer.baseline.ttgnwrapper import TTGNWrapper
 from TTGN.utils.utils import get_neighbor_finder
 from common import add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args, parse_args
 
 from CFTGNNExplainer.sampling.embedding import StaticEmbedding
-from CFTGNNExplainer.baseline.ttgnbridge import TTGNBridge
-from CFTGNNExplainer.baseline.pgexplainer import TPGExplainer
+from CFTGNNExplainer.implementations.ttgn import TTGNBridge, TTGNWrapper
+from CFTGNNExplainer.explainer.baseline.pgexplainer import TPGExplainer
 from TTGN.model.tgn import TGN
 
 if __name__ == '__main__':

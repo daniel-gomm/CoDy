@@ -15,10 +15,9 @@ from TTGN.utils.utils import get_neighbor_finder
 from common import add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args, parse_args, \
     get_event_ids_from_file
 
-from CFTGNNExplainer.baseline.ttgnwrapper import TTGNWrapper
-from CFTGNNExplainer.baseline.ttgnbridge import TTGNBridge
-from CFTGNNExplainer.baseline.pgexplainer import TPGExplainer, FactualExplanation
-from CFTGNNExplainer.baseline.tgnnexplainer import TGNNExplainer, TGNNExplainerExplanation
+from CFTGNNExplainer.implementations.ttgn import TTGNBridge, TTGNWrapper
+from CFTGNNExplainer.explainer.baseline.pgexplainer import TPGExplainer, FactualExplanation
+from CFTGNNExplainer.explainer.baseline.tgnnexplainer import TGNNExplainer, TGNNExplainerExplanation
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
