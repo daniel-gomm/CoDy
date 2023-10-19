@@ -15,7 +15,7 @@ DATASET_NAMES=($(find "$PROCESSED_DATA_DIR" -mindepth 1 -maxdepth 1 -type d -exe
 
 EXPLAINER_TYPES=("pg_explainer" "tgnnexplainer" "greedy" "searching" "cftgnnexplainer")
 
-SAMPLER_TYPES=("random" "recent" "closest" "pretrained")
+SAMPLER_TYPES=("random" "recent" "closest" "pretrained" "1-best")
 
 
 function test_exists() {

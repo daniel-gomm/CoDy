@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
 
 
-def evaluate(evaluated_explainer: EvaluationExplainer, explained_event_ids: np.ndarray):
+def evaluate(evaluated_explainer: EvaluationExplainer, explained_event_ids: np.ndarray, optimize: bool = False):
     explanation_list = []
 
     progress_bar = ProgressBar(len(explained_event_ids), prefix='Evaluating explainer')
@@ -28,7 +28,7 @@ def evaluate(evaluated_explainer: EvaluationExplainer, explained_event_ids: np.n
 
     for event_id in explained_event_ids:
         progress_bar.update_postfix(f'Generating original score for event {event_id}')
-        if type(evaluated_explainer) is not EvaluationCFTGNNExplainer:
+        if optimize:
             original_prediction = evaluated_explainer.get_evaluation_original_prediction(event_id, last_event_id)
             evaluated_explainer.tgnn_bridge.reset_model()
         else:
@@ -59,12 +59,15 @@ if __name__ == '__main__':
                         help='Provide if evaluation should focus on wrong predictions only')
     parser.add_argument('--debug', action='store_true',
                         help='Add this flag for more detailed debug outputs')
+    parser.add_argument('--optimize', action='store_true',
+                        help='Add this flag to optimize evaluation performance at the cost of a bit of accuracy '
+                             '(activate for debugging only)')
     parser.add_argument('-r', '--results', required=True, type=str,
                         help='Filepath for the evaluation results')
     parser.add_argument('--explainer', required=True, type=str, help='Which explainer to evaluate',
                         choices=['greedy', 'searching', 'cftgnnexplainer'])
     parser.add_argument('--sampler', required=True, default='recent', type=str,
-                        choices=['random', 'recent', 'closest', 'pretrained'])
+                        choices=['random', 'recent', 'closest', 'pretrained', '1-best'])
     parser.add_argument('--sampler_model_path', default=None, type=str,
                         help='Path to the pretrained sampler model')
     parser.add_argument('--dynamic', action='store_true',
@@ -119,5 +122,5 @@ if __name__ == '__main__':
         case _:
             raise NotImplementedError
 
-    explanations = evaluate(explainer, event_ids_to_explain)
+    explanations = evaluate(explainer, event_ids_to_explain, args.optimize)
     export_explanations(explanations, args.results)

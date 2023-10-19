@@ -8,8 +8,8 @@ import time
 from CFTGNNExplainer.connector.bridge import TGNNBridge
 from CFTGNNExplainer.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample
-from CFTGNNExplainer.explainer.greedy import GreedyCFExplainer, is_prediction_most_shifted
-from CFTGNNExplainer.sampling.sampler import EdgeSampler, PretrainedEdgeSamplerParameters
+from CFTGNNExplainer.explainer.greedy import GreedyCFExplainer, is_prediction_most_shifted, GreedyTreeNode
+from CFTGNNExplainer.sampling.sampler import EdgeSampler, PretrainedEdgeSamplerParameters, OneBestEdgeSampler
 from CFTGNNExplainer.explainer.searching import (BatchSearchTreeNode, select_best_cf_example,
                                                  find_best_non_counterfactual_example, SearchingCFExplainer)
 from CFTGNNExplainer.explainer.mcts import CFTGNNExplainer, MCTSTreeNode
@@ -31,7 +31,8 @@ class EvaluationCounterFactualExample(CounterFactualExample):
             'counterfactual_prediction': self.counterfactual_prediction,
             'achieves_counterfactual_explanation': self.achieves_counterfactual_explanation,
             'cf_example_event_ids': self.event_ids,
-            'cf_example_event_importances': self.get_absolute_importances()
+            'cf_example_absolute_importances': self.get_absolute_importances(),
+            'cf_example_raw_importances': self.event_importances
         }
         results.update(self.statistics)
         results.update(self.timings)
@@ -92,72 +93,92 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
 
     def evaluate_explanation(self, explained_event_id: int,
                              original_prediction: float) -> EvaluationCounterFactualExample:
+        if original_prediction is None:
+            original_prediction, sampler = self.initialize_explanation(explained_event_id)
+        else:
+            sampler = self.initialize_explanation_evaluation(explained_event_id, original_prediction)
         timings = {}
         statistics = {}
-        start_time = time.time_ns()
-        sampler = self.initialize_explanation_evaluation(explained_event_id, original_prediction)
-        min_event_id = sampler.subgraph[COL_ID].min() - 1
-        if 0 < self.last_min_id <= min_event_id:
-            self.tgnn_bridge.initialize(self.last_min_id, show_progress=False,
-                                        memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
-        self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
-
         oracle_calls = 0
         oracle_call_time = 0
-        remaining_subgraph = sampler.subgraph[COL_ID].to_numpy()
-        remaining_subgraph = remaining_subgraph[remaining_subgraph != explained_event_id]
-        cf_example_prediction = original_prediction  # Initialize to orig prediction as complete subgraph is considered
-        cf_example_events = []
-        cf_example_importances = []
-        achieved_counterfactual_explanation = True
-        largest_prediction_delta = 0
-        i = 1
+        start_time = time.time_ns()
+        min_event_id = sampler.subgraph[COL_ID].min() - 1
+        root_node = GreedyTreeNode(explained_event_id, None, original_prediction=original_prediction,
+                                   prediction=original_prediction)
+        max_depth = sys.maxsize
+        best_cf_example = None
+        best_non_cf_example = None
+        skip_search = False
+
+        if type(sampler) is OneBestEdgeSampler:
+            for child_id in sampler.rank_subgraph(base_event_id=explained_event_id, excluded_events=np.array([])):
+                prediction = self.calculate_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID],
+                                                                cf_example_events=[],
+                                                                explained_event_id=explained_event_id,
+                                                                candidate_event_id=child_id,
+                                                                memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
+                child_node = GreedyTreeNode(child_id, parent=root_node, original_prediction=original_prediction,
+                                            prediction=prediction)
+                root_node.children.append(child_node)
+                if child_node.is_counterfactual:
+                    if best_cf_example is None:
+                        best_cf_example = child_node
+                    elif best_cf_example.exploitation_score < child_node.exploitation_score:
+                        best_cf_example = child_node
+                    if self.verbose:
+                        self.logger.info(f'Found counterfactual explanation: ' + str(child_node.to_cf_example()))
+                sampler.set_event_weight(child_node.edge_id, child_node.exploitation_score)
+            if best_cf_example is not None:
+                skip_search = True
+            root_node.expanded = True
+
+        i = 0
         init_end_time = time.time_ns()
         timings['init_duration'] = init_end_time - start_time
-        while cf_example_prediction * original_prediction > 0:
-            candidate_events = sampler.sample(explained_event_id, np.array(cf_example_events), size=self.sample_size)
-            most_shifted_prediction = cf_example_prediction
-            most_shifting_event_id = None
-            explainer_iteration_init_time = time.time_ns()
+        while not skip_search:
+            node_to_expand = root_node.select_next_leaf(max_depth)
+            if node_to_expand is None or (node_to_expand == root_node and root_node.expanded):
+                break  # No more nodes can be selected -> conclude search without a cf-example
+            best_non_cf_example = node_to_expand
+            if self.verbose:
+                self.logger.info(f'Iteration {i} selected event {node_to_expand.edge_id} with prediction '
+                                 f'{node_to_expand.prediction}. '
+                                 f'CF-example events: {node_to_expand.hash()}')
+            sampled_edge_ids = sampler.sample(explained_event_id,
+                                              excluded_events=np.array(node_to_expand.get_parent_ids()),
+                                              size=self.sample_size)
             self.tgnn_bridge.initialize(min_event_id, show_progress=False,
                                         memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
-            oracle_call_time += time.time_ns() - explainer_iteration_init_time
-            for candidate_event_id in candidate_events:
+            for candidate_event_id in sampled_edge_ids:
                 candidate_iteration_start_time = time.time_ns()
-                current_subgraph_prediction = self.calculate_subgraph_prediction(candidate_events, cf_example_events,
-                                                                                 explained_event_id, candidate_event_id,
-                                                                                 memory_label=CUR_IT_MIN_EVENT_MEM_LBL)
+                prediction = self.calculate_subgraph_prediction(candidate_events=sampled_edge_ids,
+                                                                cf_example_events=node_to_expand.get_parent_ids() +
+                                                                                  [node_to_expand.edge_id],
+                                                                explained_event_id=explained_event_id,
+                                                                candidate_event_id=candidate_event_id,
+                                                                memory_label=CUR_IT_MIN_EVENT_MEM_LBL)
                 oracle_call_time += time.time_ns() - candidate_iteration_start_time
                 oracle_calls += 1
-                is_most_shifted, delta = is_prediction_most_shifted(original_prediction, current_subgraph_prediction,
-                                                                    largest_prediction_delta)
-                if self.verbose:
-                    self.logger.info(f'Event {candidate_event_id}, prediction {current_subgraph_prediction}, '
-                                     f'delta {delta}')
-                if is_most_shifted:
-                    most_shifted_prediction = current_subgraph_prediction
-                    largest_prediction_delta = delta
-                    most_shifting_event_id = candidate_event_id
-
+                child_node = GreedyTreeNode(candidate_event_id, parent=node_to_expand,
+                                            original_prediction=original_prediction, prediction=prediction)
+                node_to_expand.children.append(child_node)
+                if child_node.is_counterfactual:
+                    if best_cf_example is None:
+                        best_cf_example = child_node
+                    elif best_cf_example.exploitation_score < child_node.exploitation_score:
+                        best_cf_example = child_node
+                    if self.verbose:
+                        self.logger.info(f'Found counterfactual explanation: ' + str(child_node.to_cf_example()))
             self.tgnn_bridge.remove_memory_backup(CUR_IT_MIN_EVENT_MEM_LBL)
-
-            if most_shifting_event_id is None:
-                # Unable to find a better counterfactual example
-                achieved_counterfactual_explanation = False
+            node_to_expand.expanded = True
+            if best_cf_example is not None:
                 break
-
-            cf_example_events.append(most_shifting_event_id)
-            cf_example_importances.append(largest_prediction_delta)
-            cf_example_prediction = most_shifted_prediction
-            remaining_subgraph = remaining_subgraph[remaining_subgraph != most_shifting_event_id]
-            if self.verbose:
-                self.logger.info(f'Iteration {i} selected event {most_shifting_event_id} with prediction '
-                                 f'{most_shifted_prediction}. '
-                                 f'CF-example events: {cf_example_events}')
             i += 1
 
-        # self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
-        self.last_min_id = min_event_id
+        best_example = best_cf_example
+        if best_example is None:
+            best_example = best_non_cf_example
+        self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
         self.tgnn_bridge.reset_model()
         end_time = time.time_ns()
         timings['oracle_call_duration'] = oracle_call_time
@@ -166,13 +187,14 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
         statistics['oracle_calls'] = oracle_calls
         statistics['candidate_size'] = len(sampler.subgraph)
         statistics['candidates'] = sampler.subgraph[COL_ID].to_list()
+        result_cf_example = best_example.to_cf_example()
         cf_example = EvaluationCounterFactualExample(explained_event_id=explained_event_id,
                                                      original_prediction=original_prediction,
-                                                     counterfactual_prediction=cf_example_prediction,
+                                                     counterfactual_prediction=result_cf_example.counterfactual_prediction,
                                                      achieves_counterfactual_explanation=
-                                                     achieved_counterfactual_explanation,
-                                                     event_ids=np.array(cf_example_events),
-                                                     event_importances=np.array(cf_example_importances),
+                                                     result_cf_example.achieves_counterfactual_explanation,
+                                                     event_ids=result_cf_example.event_ids,
+                                                     event_importances=result_cf_example.event_importances,
                                                      timings=timings,
                                                      statistics=statistics)
         if self.verbose:
@@ -230,10 +252,13 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
 
     def evaluate_explanation(self, explained_event_id: int, original_prediction: float) -> (
             EvaluationCounterFactualExample):
+        if original_prediction is None:
+            original_prediction, sampler = self.initialize_explanation(explained_event_id)
+        else:
+            sampler = self.initialize_explanation_evaluation(explained_event_id, original_prediction)
         timings = {}
         statistics = {}
         start_time = time.time_ns()
-        sampler = self.initialize_explanation_evaluation(explained_event_id, original_prediction)
         min_event_id = sampler.subgraph[COL_ID].min() - 1
         if 0 < self.last_min_id <= min_event_id:
             self.tgnn_bridge.initialize(self.last_min_id, show_progress=False,
@@ -337,14 +362,33 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
 
         best_cf_example = None
         best_cf_example_step = 0
+        step = 0
+        skip_search = False
         max_depth = sys.maxsize
         root_node = MCTSTreeNode(explained_event_id, parent=None, sampling_rank=0,
                                  original_prediction=original_prediction)
-        root_node.prediction = original_prediction
-        step = 0
+        self._expand_node(explained_event_id, root_node, original_prediction, sampler)
+
+        if type(sampler) is OneBestEdgeSampler:
+            for child in root_node.children:
+                # Expand all children
+                oracle_call_time += self._run_node_expansion(explained_event_id, child, sampler)
+                oracle_calls += 1
+                if child.is_counterfactual:
+                    if best_cf_example is None:
+                        best_cf_example = child
+                    elif best_cf_example.exploitation_score < child.exploitation_score:
+                        best_cf_example = child
+                    if self.verbose:
+                        self.logger.info(f'Found counterfactual explanation: '
+                                         + str(child.to_cf_example()))
+                sampler.set_event_weight(child.edge_id, child.exploitation_score)
+            if best_cf_example is not None:
+                skip_search = True
+            step += 1
         init_end_time = time.time_ns()
         timings['init_duration'] = init_end_time - start_time
-        while step <= self.max_steps:
+        while step <= self.max_steps and not skip_search:
             node_to_expand = None
             while node_to_expand is None:
                 node_to_expand = root_node.select_next_leaf(max_depth)
