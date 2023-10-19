@@ -158,11 +158,29 @@ class CFTGNNExplainer(Explainer):
         """
         original_prediction, sampler = self.initialize_explanation(explained_event_id)
         best_cf_example = None
+        step = 0
         max_depth = sys.maxsize
         root_node = MCTSTreeNode(explained_event_id, parent=None, sampling_rank=0,
                                  original_prediction=original_prediction)
-        root_node.prediction = original_prediction
-        step = 0
+        self._expand_node(explained_event_id, root_node, original_prediction, sampler)
+
+        if type(sampler) is OneBestEdgeSampler:
+            for child in root_node.children:
+                # Expand all children
+                self._run_node_expansion(explained_event_id, child, sampler)
+                if child.is_counterfactual:
+                    if best_cf_example is None:
+                        best_cf_example = child
+                    elif best_cf_example.exploitation_score < child.exploitation_score:
+                        best_cf_example = child
+                    if self.verbose:
+                        self.logger.info(f'Found counterfactual explanation: '
+                                         + str(child.to_cf_example()))
+                sampler.set_event_weight(child.edge_id, child.exploitation_score)
+            if best_cf_example is not None:
+                return best_cf_example.to_cf_example()
+            step += 1
+
         while step <= self.max_steps:
             node_to_expand = None
             while node_to_expand is None:
@@ -193,8 +211,7 @@ class CFTGNNExplainer(Explainer):
                     best_cf_example = node_to_expand
                 max_depth = best_cf_example.depth
                 if self.verbose:
-                    self.logger.info(f'Found counterfactual explanation: '
-                                     + str(node_to_expand.to_cf_example()))
+                    self.logger.info(f'Found counterfactual explanation: ' + str(node_to_expand.to_cf_example()))
             step += 1
         if best_cf_example is None:
             best_cf_example = find_best_non_counterfactual_example(root_node)

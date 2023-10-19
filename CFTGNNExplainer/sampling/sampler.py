@@ -120,6 +120,22 @@ class PretrainedEdgeSampler(EdgeSampler):
             subgraph_without_base_event = self.subgraph[self.subgraph[COL_ID] != base_event_id]
             edge_mask = subgraph_without_base_event[COL_ID].isin(event_ids).to_numpy()
             weights = self.initial_weights[edge_mask]
-        filtered_subgraph['weights'] = weights
-        sorted_subgraph = filtered_subgraph.sort_values(by='weights', ascending=self.positive_original_prediction)
+        filtered_subgraph['weight'] = weights
+        sorted_subgraph = filtered_subgraph.sort_values(by='weight', ascending=self.positive_original_prediction)
+        return sorted_subgraph[COL_ID].to_numpy()
+
+
+class OneBestEdgeSampler(EdgeSampler):
+
+    def __init__(self, subgraph: pd.DataFrame):
+        super().__init__(subgraph)
+        self.subgraph['weight'] = 0
+
+    def set_event_weight(self, event_id: int, weight: float):
+        self.subgraph.loc[self.subgraph[COL_ID] == event_id, 'weight'] = weight
+
+    def rank_subgraph(self, base_event_id: int, excluded_events: np.ndarray,
+                      known_cf_examples: List[np.ndarray] | None = None):
+        filtered_subgraph = filter_subgraph(base_event_id, excluded_events, self.subgraph, known_cf_examples)
+        sorted_subgraph = filtered_subgraph.sort_values(by='weight', ascending=False)
         return sorted_subgraph[COL_ID].to_numpy()
