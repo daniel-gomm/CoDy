@@ -7,9 +7,8 @@ import numpy as np
 
 from CFTGNNExplainer.connector.bridge import TGNNBridge
 from CFTGNNExplainer.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
-from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample
-from CFTGNNExplainer.explainer.searching import calculate_prediction_delta
-from CFTGNNExplainer.sampling.sampler import PretrainedEdgeSamplerParameters, EdgeSampler
+from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample, calculate_prediction_delta, TreeNode
+from CFTGNNExplainer.sampling.sampler import PretrainedEdgeSamplerParameters, EdgeSampler, OneBestEdgeSampler
 
 
 def find_best_non_counterfactual_example(root_node: MCTSTreeNode) -> MCTSTreeNode:
@@ -28,10 +27,9 @@ def find_best_non_counterfactual_example(root_node: MCTSTreeNode) -> MCTSTreeNod
     return best_example
 
 
-class MCTSTreeNode:
+class MCTSTreeNode(TreeNode):
     parent: MCTSTreeNode
     children: List[MCTSTreeNode]
-    score: float
     number_of_selections: int
     is_counterfactual: bool
     edge_id: int
@@ -39,55 +37,13 @@ class MCTSTreeNode:
     prediction: float | None
 
     def __init__(self, edge_id: int, parent: MCTSTreeNode | None, original_prediction: float, sampling_rank: int):
-        self.edge_id: int = edge_id
-        self.parent = parent
+        super().__init__(edge_id, parent, original_prediction)
         self.sampling_rank = sampling_rank
-        self.original_prediction: float = original_prediction
-        self.prediction = None
-        self.is_counterfactual = False
-        self.exploitation_score: float = 0
         self.number_of_selections: int = 1
-        self.children = []
         if self.parent is None:
             self.depth = 0
         else:
             self.depth = self.parent.depth + 1
-        self.expanded = False
-        self.max_expansion_reached = False
-
-    def expand(self, prediction: float):
-        """
-        Expand the node
-        @param prediction: The prediction achieved when this tree node is included in the counterfactual example
-        @return: None
-        """
-        self.prediction = prediction
-        self.exploitation_score = max(0.0, (calculate_prediction_delta(self.original_prediction, self.prediction) /
-                                            abs(self.original_prediction)))
-        self.expanded = True
-        if self.original_prediction * self.prediction < 0:
-            self.is_counterfactual = True
-            self.max_expansion_reached = True
-        self.expansion_backpropagation()
-
-    def _check_max_expanded(self):
-        """
-        Recursively check if the node is already maximally expanded, meaning that no further expansions of its child
-        nodes are possible
-        """
-        if not self.max_expansion_reached:
-            for child in self.children:
-                if not child.max_expansion_reached or child.expanded:
-                    return
-            self.max_expansion_reached = True
-            if self.parent is not None:
-                self.parent._check_max_expanded()
-
-    def _is_leaf(self) -> bool:
-        """
-        Check if the node is a leaf node, meaning that it has no children
-        """
-        return len(self.children) == 0
 
     def _calculate_score(self):
         """
@@ -102,7 +58,7 @@ class MCTSTreeNode:
         @param max_depth: Maximum depth at which to search for leaf nodes
         @return: Leaf node to expand
         """
-        if self._is_leaf():
+        if self.is_leaf():
             return self
         if self.depth == max_depth:
             self.max_expansion_reached = True
@@ -141,7 +97,7 @@ class MCTSTreeNode:
         """
         Propagate the information that a node is selected backwards and update scores
         """
-        if not self._is_leaf():
+        if not self.is_leaf():
             # Here the exploitation score could be updates. However, this seems to make the search performance worse
 
             # self.exploitation_score = max(0.0, np.average([child.exploitation_score for child in self.children
@@ -149,40 +105,10 @@ class MCTSTreeNode:
             if self.exploitation_score == 0:
                 self.exploitation_score = max(0.0, np.average([child.exploitation_score for child in self.children
                                                                if child.expanded]))
-            pass
 
         self.number_of_selections += 1
         if self.parent is not None:
             self.parent.expansion_backpropagation()
-
-    def to_cf_example(self) -> CounterFactualExample:
-        """
-        Returns an instance of CounterFactualExample for the current node by aggregating information from parents
-        """
-        cf_events = []
-        cf_event_importances = []
-        node = self
-        while node.parent is not None:
-            cf_events.append(node.edge_id)
-            cf_event_importances.append(calculate_prediction_delta(self.original_prediction, node.prediction))
-            node = node.parent
-        cf_events.reverse()
-        cf_event_importances.reverse()
-        return CounterFactualExample(explained_event_id=node.edge_id,
-                                     original_prediction=self.original_prediction,
-                                     counterfactual_prediction=self.prediction,
-                                     achieves_counterfactual_explanation=self.is_counterfactual,
-                                     event_ids=np.array(cf_events),
-                                     event_importances=np.array(cf_event_importances))
-
-    def hash(self):
-        edge_ids = []
-        node = self
-        while node.parent is not None:
-            edge_ids.append(node.edge_id)
-            node = node.parent
-        sorted_edge_ids = sorted(edge_ids)
-        return '-'.join(map(str, sorted_edge_ids))
 
 
 class CFTGNNExplainer(Explainer):
@@ -211,11 +137,10 @@ class CFTGNNExplainer(Explainer):
         self._expand_node(explained_edge_id, node_to_expand, prediction, sampler)
 
     def _expand_node(self, explained_edge_id: int, node_to_expand: MCTSTreeNode, prediction: float, sampler: EdgeSampler):
-        node_to_expand.expand(prediction)
-
         self.known_states[node_to_expand.hash()] = prediction
 
         if node_to_expand.is_counterfactual:
+            node_to_expand.expand(prediction, [])
             return
 
         edge_ids_to_exclude = []
@@ -226,12 +151,13 @@ class CFTGNNExplainer(Explainer):
 
         ranked_edge_ids = sampler.rank_subgraph(base_event_id=explained_edge_id,
                                                 excluded_events=np.array(edge_ids_to_exclude))
-
+        children = []
         for rank, edge_id in enumerate(ranked_edge_ids):
             new_child = MCTSTreeNode(edge_id, node_to_expand, node_to_expand.original_prediction, rank)
-            node_to_expand.children.append(new_child)
+            children.append(new_child)
             if new_child.hash() in self.known_states.keys():
                 self._expand_node(explained_edge_id, new_child, self.known_states[new_child.hash()], sampler)
+        node_to_expand.expand(prediction, children)
 
     def explain(self, explained_event_id: int) -> CounterFactualExample:
         """
@@ -251,15 +177,16 @@ class CFTGNNExplainer(Explainer):
             node_to_expand = None
             while node_to_expand is None:
                 node_to_expand = root_node.select_next_leaf(max_depth)
+                if node_to_expand.depth > max_depth:
+                    node_to_expand.expansion_backpropagation()
+                    continue
+                if node_to_expand == root_node and root_node.expanded:
+                    break  # No nodes are selectable, meaning that we can conclude the search
                 if node_to_expand.hash() in self.known_states.keys():
                     # Already encountered this combination -> select new combination of events instead
                     self._expand_node(explained_event_id, node_to_expand, self.known_states[node_to_expand.hash()],
                                       sampler)
                     node_to_expand = None
-            if node_to_expand.depth > max_depth:
-                # Should not happen. TODO: Check if it is save to remove this if-condition
-                node_to_expand.expansion_backpropagation()
-                continue
             if node_to_expand == root_node and root_node.expanded:
                 if self.verbose:
                     self.logger.info('Search Tree is fully expanded. Concluding search.')

@@ -10,8 +10,8 @@ from CFTGNNExplainer.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_
 from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample
 from CFTGNNExplainer.explainer.greedy import GreedyCFExplainer, is_prediction_most_shifted
 from CFTGNNExplainer.sampling.sampler import EdgeSampler, PretrainedEdgeSamplerParameters
-from CFTGNNExplainer.explainer.searching import (TreeNode, select_best_cf_example, find_best_non_counterfactual_example,
-                                                 SearchingCFExplainer)
+from CFTGNNExplainer.explainer.searching import (BatchSearchTreeNode, select_best_cf_example,
+                                                 find_best_non_counterfactual_example, SearchingCFExplainer)
 from CFTGNNExplainer.explainer.mcts import CFTGNNExplainer, MCTSTreeNode
 from CFTGNNExplainer.explainer.mcts import find_best_non_counterfactual_example as find_best_non_cf_example
 
@@ -193,11 +193,11 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
                                      pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.last_min_id = 0
 
-    def expand_node(self, explained_edge_id: int, node_to_expand: TreeNode, sampler: EdgeSampler,
-                    known_cf_examples: List[np.ndarray] | None = None) -> (List[TreeNode], int, int):
+    def expand_node(self, explained_edge_id: int, node_to_expand: BatchSearchTreeNode, sampler: EdgeSampler,
+                    known_cf_examples: List[np.ndarray] | None = None) -> (List[BatchSearchTreeNode], int, int):
         oracle_calls = 0
         oracle_call_time = 0
-        counterfactual_examples: List[TreeNode] = []
+        counterfactual_examples: List[BatchSearchTreeNode] = []
         original_prediction = node_to_expand.original_prediction
         if not node_to_expand.is_leaf():
             return counterfactual_examples, oracle_calls, oracle_call_time
@@ -226,7 +226,7 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
                                                             memory_label=CUR_IT_MIN_EVENT_MEM_LBL)
             oracle_call_time += time.time_ns() - oracle_call_start
             oracle_calls += 1
-            new_child = TreeNode(edge_id, node_to_expand, prediction, original_prediction)
+            new_child = BatchSearchTreeNode(edge_id, node_to_expand, prediction, original_prediction)
             node_to_expand.children.append(new_child)
             if new_child.is_counterfactual:
                 counterfactual_examples.append(new_child)
@@ -250,8 +250,8 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
         best_cf_example = None
         known_cf_examples = []
         max_depth = sys.maxsize
-        root_node = TreeNode(explained_event_id, parent=None, prediction=original_prediction,
-                             original_prediction=original_prediction)
+        root_node = BatchSearchTreeNode(explained_event_id, parent=None, prediction=original_prediction,
+                                        original_prediction=original_prediction)
         step = 0
         init_end_time = time.time_ns()
         timings['init_duration'] = init_end_time - start_time
@@ -331,30 +331,6 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
         oracle_call_time = time.time_ns() - oracle_call_start_time
         self._expand_node(explained_edge_id, node_to_expand, prediction, sampler)
         return oracle_call_time
-
-    def _expand_node(self, explained_edge_id: int, node_to_expand: MCTSTreeNode, prediction: float,
-                     sampler: EdgeSampler):
-        node_to_expand.expand(prediction)
-
-        self.known_states[node_to_expand.hash()] = prediction
-
-        if node_to_expand.is_counterfactual:
-            return
-
-        edge_ids_to_exclude = []
-        node = node_to_expand
-        while node.parent is not None:
-            edge_ids_to_exclude.append(node.edge_id)
-            node = node.parent
-
-        ranked_edge_ids = sampler.rank_subgraph(base_event_id=explained_edge_id,
-                                                excluded_events=np.array(edge_ids_to_exclude))
-
-        for rank, edge_id in enumerate(ranked_edge_ids):
-            new_child = MCTSTreeNode(edge_id, node_to_expand, node_to_expand.original_prediction, rank)
-            node_to_expand.children.append(new_child)
-            if new_child.hash() in self.known_states.keys():
-                self._expand_node(explained_edge_id, new_child, self.known_states[new_child.hash()], sampler)
 
     def evaluate_explanation(self, explained_event_id: int, original_prediction: float) -> (
             EvaluationCounterFactualExample):
