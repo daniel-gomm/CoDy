@@ -130,6 +130,14 @@ class TreeNode:
                                      event_ids=np.array(cf_events),
                                      event_importances=np.array(cf_event_importances))
 
+    def get_parent_ids(self):
+        parent_ids = []
+        node = self
+        while node.parent is not None:
+            parent_ids.append(node.edge_id)
+            node = node.parent
+        return parent_ids
+
     def hash(self):
         edge_ids = []
         node = self

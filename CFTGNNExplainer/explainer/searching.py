@@ -145,12 +145,7 @@ class SearchingCFExplainer(Explainer):
         if not node_to_expand.is_leaf():
             return counterfactual_examples
 
-        edge_ids_to_exclude = []
-        node = node_to_expand
-        while node.parent is not None:
-            edge_ids_to_exclude.append(node.edge_id)
-            node = node.parent
-
+        edge_ids_to_exclude = node_to_expand.get_parent_ids()
         sampled_edge_ids = sampler.sample(explained_edge_id, excluded_events=np.array(edge_ids_to_exclude),
                                           size=self.sample_size, known_cf_examples=known_cf_examples)
         if self.verbose:

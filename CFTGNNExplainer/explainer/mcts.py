@@ -122,12 +122,7 @@ class CFTGNNExplainer(Explainer):
         self.known_states = {}
 
     def _run_node_expansion(self, explained_edge_id: int, node_to_expand: MCTSTreeNode, sampler: EdgeSampler):
-        edge_ids_to_exclude = []
-        node = node_to_expand
-        while node.parent is not None:
-            edge_ids_to_exclude.append(node.edge_id)
-            node = node.parent
-
+        edge_ids_to_exclude = node_to_expand.get_parent_ids()
         prediction = self.calculate_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID],
                                                         cf_example_events=edge_ids_to_exclude,
                                                         explained_event_id=explained_edge_id,
@@ -143,12 +138,7 @@ class CFTGNNExplainer(Explainer):
             node_to_expand.expand(prediction, [])
             return
 
-        edge_ids_to_exclude = []
-        node = node_to_expand
-        while node.parent is not None:
-            edge_ids_to_exclude.append(node.edge_id)
-            node = node.parent
-
+        edge_ids_to_exclude = node_to_expand.get_parent_ids()
         ranked_edge_ids = sampler.rank_subgraph(base_event_id=explained_edge_id,
                                                 excluded_events=np.array(edge_ids_to_exclude))
         children = []

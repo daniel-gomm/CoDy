@@ -202,12 +202,7 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
         if not node_to_expand.is_leaf():
             return counterfactual_examples, oracle_calls, oracle_call_time
 
-        edge_ids_to_exclude = []
-        node = node_to_expand
-        while node.parent is not None:
-            edge_ids_to_exclude.append(node.edge_id)
-            node = node.parent
-
+        edge_ids_to_exclude = node_to_expand.get_parent_ids()
         sampled_edge_ids = sampler.sample(explained_edge_id, excluded_events=np.array(edge_ids_to_exclude),
                                           size=self.sample_size, known_cf_examples=known_cf_examples)
         if self.verbose:
@@ -316,12 +311,7 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
         self.last_min_id = 0
 
     def _run_node_expansion(self, explained_edge_id: int, node_to_expand: MCTSTreeNode, sampler: EdgeSampler):
-        edge_ids_to_exclude = []
-        node = node_to_expand
-        while node.parent is not None:
-            edge_ids_to_exclude.append(node.edge_id)
-            node = node.parent
-
+        edge_ids_to_exclude = node_to_expand.get_parent_ids()
         oracle_call_start_time = time.time_ns()
         prediction = self.calculate_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID],
                                                         cf_example_events=edge_ids_to_exclude,
