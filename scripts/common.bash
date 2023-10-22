@@ -13,25 +13,32 @@ RESULTS_DIR="$PARENT_DIR/resources/results"
 
 DATASET_NAMES=($(find "$PROCESSED_DATA_DIR" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;))
 
-EXPLAINER_TYPES=("pg_explainer" "tgnnexplainer" "greedy" "searching" "cftgnnexplainer")
+FACTUAL_EXPLAINER_TYPES=("pg_explainer" "tgnnexplainer")
+COUNTERFACTUAL_EXPLAINER_TYPES=("greedy" "searching" "cftgnnexplainer")
+EXPLAINER_TYPES=("${FACTUAL_EXPLAINER_TYPES[@]}" "${COUNTERFACTUAL_EXPLAINER_TYPES[@]}")
 
 SAMPLER_TYPES=("random" "recent" "closest" "pretrained" "1-best")
+
+
+function value_in_array() {
+  local tested_item="$1"
+  shift
+  local options_array=("$@")
+
+  for element in "${options_array[@]}"; do
+    if [ "$element" = "$tested_item" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
 
 
 function test_exists() {
   local tested_item="$1"
   shift
   local options_array=("$@")
-
-  match_found=false
-  for element in "${options_array[@]}"; do
-    if [ "$element" = "$tested_item" ]; then
-      match_found=true
-      break
-    fi
-  done
-
-  if [ "$match_found" = true ]; then
+  if value_in_array "$tested_item" "${options_array[@]}"; then
     return
   else
     echo -e "${RED}\"$tested_item\" is not a valid name!${NC}

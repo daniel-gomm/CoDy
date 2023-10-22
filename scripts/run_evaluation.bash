@@ -43,28 +43,6 @@ Possible values: ${CYAN}[${DATASET_NAMES[*]}]${NC}
 exit 1
 }
 
-function test_exists() {
-  local tested_item="$1"
-  shift
-  local options_array=("$@")
-
-  match_found=false
-  for element in "${options_array[@]}"; do
-    if [ "$element" = "$tested_item" ]; then
-      match_found=true
-      break
-    fi
-  done
-
-  if [ "$match_found" = true ]; then
-    return
-  else
-    echo -e "${RED}\"$tested_item\" is not a valid name!${NC}
-Possible options are: [${CYAN}${options_array[*]}${NC}]"
-    show_help
-  fi
-}
-
 if [ $# -eq 0 ]; then
   show_help
 else

@@ -9,6 +9,7 @@ import pandas as pd
 import torch
 
 from CFTGNNExplainer.implementations.tgn import TGNWrapper, to_data_object
+from CFTGNNExplainer.implementations.ttgn import TTGNWrapper
 from CFTGNNExplainer.data import ContinuousTimeDynamicGraphDataset, TrainTestDatasetParameters
 from TGN.model.tgn import TGN
 from TGN.utils.utils import get_neighbor_finder
@@ -100,7 +101,7 @@ def create_tgn_wrapper_from_args(args: Namespace, dataset: ContinuousTimeDynamic
 
 def get_event_ids_from_file(event_ids_filepath: str | None, dataset: ContinuousTimeDynamicGraphDataset,
                             logger: logging.Logger, wrong_predictions_only: bool = False,
-                            tgn_wrapper: TGNWrapper = None):
+                            tgn_wrapper: TGNWrapper | TTGNWrapper = None):
     if os.path.exists(event_ids_filepath):
         return np.load(event_ids_filepath)
     else:
@@ -117,7 +118,7 @@ def get_event_ids_from_file(event_ids_filepath: str | None, dataset: ContinuousT
         return event_ids_to_explain
 
 
-def sample_wrong_predictions(tgn_wrapper: TGNWrapper):
+def sample_wrong_predictions(tgn_wrapper: TGNWrapper | TTGNWrapper):
     tgn_wrapper.activate_evaluation_mode()
     max_event_id = np.max(tgn_wrapper.dataset.edge_ids)
     batch_data = tgn_wrapper.dataset.get_batch_data(0, max_event_id - 1)
