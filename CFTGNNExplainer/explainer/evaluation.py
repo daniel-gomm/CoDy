@@ -9,7 +9,7 @@ from CFTGNNExplainer.connector import TGNNBridge
 from CFTGNNExplainer.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample
 from CFTGNNExplainer.explainer.greedy import GreedyCFExplainer, GreedyTreeNode
-from CFTGNNExplainer.sampling.sampler import EdgeSampler, PretrainedEdgeSamplerParameters, OneBestEdgeSampler
+from CFTGNNExplainer.sampler import EdgeSampler, PretrainedEdgeSamplerParameters, OneBestEdgeSampler
 from CFTGNNExplainer.explainer.searching import (BatchSearchTreeNode, select_best_cf_example,
                                                  find_best_non_counterfactual_example, SearchingCFExplainer)
 from CFTGNNExplainer.explainer.mcts import CFTGNNExplainer, MCTSTreeNode
@@ -107,7 +107,7 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
                                    prediction=original_prediction)
         max_depth = sys.maxsize
         best_cf_example = None
-        best_non_cf_example = None
+        best_non_cf_example = root_node
         skip_search = False
 
         if type(sampler) is OneBestEdgeSampler:
