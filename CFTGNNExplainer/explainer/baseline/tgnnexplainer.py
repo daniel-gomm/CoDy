@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from pandas import DataFrame
 
-from CFTGNNExplainer.sampling.embedding import Embedding
+from CFTGNNExplainer.embedding import Embedding
 from CFTGNNExplainer.explainer.baseline.pgexplainer import TPGExplainer, greedy_highest_value_over_array
 from CFTGNNExplainer.implementations.ttgn import TTGNBridge
 from CFTGNNExplainer.constants import COL_TIMESTAMP, COL_NODE_U, COL_NODE_I, COL_ID

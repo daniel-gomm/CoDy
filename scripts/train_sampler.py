@@ -11,7 +11,7 @@ from typing import List, Dict
 
 from sklearn.metrics import ndcg_score
 
-from CFTGNNExplainer.sampling.sampler import create_embedding_model
+from CFTGNNExplainer.sampler import create_embedding_model
 from common import (create_dataset_from_args, create_tgn_wrapper_from_args, add_dataset_arguments,
                     add_wrapper_model_arguments, parse_args)
 
@@ -20,7 +20,7 @@ from CFTGNNExplainer.constants import EXPLAINED_EVENT_MEMORY_LABEL, CUR_IT_MIN_E
 from CFTGNNExplainer.data import TrainTestDatasetParameters
 from CFTGNNExplainer.explainer.evaluation import EvaluationExplainer
 from CFTGNNExplainer.explainer.base import calculate_prediction_delta
-from CFTGNNExplainer.sampling.embedding import Embedding, DynamicEmbedding, StaticEmbedding
+from CFTGNNExplainer.embedding import Embedding, DynamicEmbedding, StaticEmbedding
 from CFTGNNExplainer.utils import ProgressBar
 
 logging.basicConfig(level=logging.INFO)

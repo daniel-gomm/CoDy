@@ -3,7 +3,7 @@ import sys
 import numpy as np
 from CFTGNNExplainer.constants import COL_ID, EXPLAINED_EVENT_MEMORY_LABEL, CUR_IT_MIN_EVENT_MEM_LBL
 from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample, calculate_prediction_delta, TreeNode
-from CFTGNNExplainer.sampling.sampler import OneBestEdgeSampler
+from CFTGNNExplainer.sampler import OneBestEdgeSampler
 
 
 class GreedyTreeNode(TreeNode):
@@ -45,7 +45,7 @@ class GreedyCFExplainer(Explainer):
                                    prediction=original_prediction)
         max_depth = sys.maxsize
         best_cf_example = None
-        best_non_cf_example = None
+        best_non_cf_example = root_node
 
         if type(sampler) is OneBestEdgeSampler:
             for child_id in sampler.rank_subgraph(base_event_id=explained_event_id, excluded_events=np.array([])):

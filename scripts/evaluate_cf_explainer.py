@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 
 from CFTGNNExplainer.data import TrainTestDatasetParameters
-from CFTGNNExplainer.sampling.embedding import DynamicEmbedding, StaticEmbedding
-from CFTGNNExplainer.sampling.sampler import create_embedding_model, PretrainedEdgeSamplerParameters
+from CFTGNNExplainer.embedding import DynamicEmbedding, StaticEmbedding
+from CFTGNNExplainer.sampler import create_embedding_model, PretrainedEdgeSamplerParameters
 from common import (add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args,
                     create_tgn_wrapper_from_args, parse_args, get_event_ids_from_file)
 

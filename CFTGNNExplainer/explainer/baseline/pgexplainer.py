@@ -4,7 +4,7 @@ from typing import Dict
 import numpy as np
 import time
 
-from CFTGNNExplainer.sampling.embedding import Embedding
+from CFTGNNExplainer.embedding import Embedding
 from CFTGNNExplainer.implementations.ttgn import TTGNBridge
 from CFTGNNExplainer.explainer.base import Explainer
 
@@ -121,7 +121,9 @@ class TPGExplainer(Explainer):
             sparsity_cutoff = int(sparsity * candidate_num)
             important_events = candidates[:sparsity_cutoff + 1]
             b_i_events = self.tgnn_bridge.base_events + important_events.tolist()
-            prediction, _ = self.tgnn_bridge.predict(explanation.explained_event_id, edge_id_preserve_list=b_i_events)
+            with torch.no_grad():
+                prediction, _ = self.tgnn_bridge.predict(explanation.explained_event_id,
+                                                         edge_id_preserve_list=b_i_events)
             prediction = prediction.detach().cpu().item()
             fid = fidelity(explanation.original_score, prediction)
             fidelity_list.append(fid)
