@@ -1,8 +1,8 @@
 import numpy as np
 import torch
 
-from CFTGNNExplainer.connector.tgnnwrapper import TGNNWrapper
-from CFTGNNExplainer.data.dataset import ContinuousTimeDynamicGraphDataset
+from CFTGNNExplainer.connector import TGNNWrapper
+from CFTGNNExplainer.data import ContinuousTimeDynamicGraphDataset
 
 
 class Embedding:

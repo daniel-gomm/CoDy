@@ -5,13 +5,13 @@ from typing import List
 import numpy as np
 import pandas as pd
 
-from CFTGNNExplainer.data.dataset import TrainTestDatasetParameters
-from CFTGNNExplainer.sampling.embedding import DynamicEmbedding, StaticEmbedding
-from CFTGNNExplainer.sampling.sampler import create_embedding_model, PretrainedEdgeSamplerParameters
+from CFTGNNExplainer.data import TrainTestDatasetParameters
+from CFTGNNExplainer.embedding import DynamicEmbedding, StaticEmbedding
+from CFTGNNExplainer.sampler import create_embedding_model, PretrainedEdgeSamplerParameters
 from common import (add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args,
                     create_tgn_wrapper_from_args, parse_args, get_event_ids_from_file)
 
-from CFTGNNExplainer.connector.bridge import DynamicTGNNBridge
+from CFTGNNExplainer.implementations.tgn import TGNBridge
 from CFTGNNExplainer.explainer.evaluation import EvaluationExplainer, EvaluationCounterFactualExample, \
     EvaluationGreedyCFExplainer, EvaluationSearchingCFExplainer, EvaluationCFTGNNExplainer
 from CFTGNNExplainer.utils import ProgressBar
@@ -106,16 +106,16 @@ if __name__ == '__main__':
 
     match args.explainer:
         case 'greedy':
-            explainer = EvaluationGreedyCFExplainer(DynamicTGNNBridge(tgn_wrapper), sampling_strategy=args.sampler,
+            explainer = EvaluationGreedyCFExplainer(TGNBridge(tgn_wrapper), sampling_strategy=args.sampler,
                                                     candidates_size=args.candidates_size, sample_size=args.sample_size,
                                                     pretrained_sampler_parameters=sampler_params, verbose=args.debug)
         case 'searching':
-            explainer = EvaluationSearchingCFExplainer(DynamicTGNNBridge(tgn_wrapper), sampling_strategy=args.sampler,
+            explainer = EvaluationSearchingCFExplainer(TGNBridge(tgn_wrapper), sampling_strategy=args.sampler,
                                                        candidates_size=args.candidates_size,
                                                        sample_size=args.sample_size, verbose=args.debug,
                                                        pretrained_sampler_parameters=sampler_params)
         case 'cftgnnexplainer':
-            explainer = EvaluationCFTGNNExplainer(DynamicTGNNBridge(tgn_wrapper), sampling_strategy=args.sampler,
+            explainer = EvaluationCFTGNNExplainer(TGNBridge(tgn_wrapper), sampling_strategy=args.sampler,
                                                   candidates_size=args.candidates_size,
                                                   max_steps=200, verbose=args.debug,
                                                   pretrained_sampler_parameters=sampler_params)

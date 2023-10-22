@@ -2,13 +2,13 @@ import argparse
 
 import torch
 
-from CFTGNNExplainer.baseline.ttgnwrapper import TTGNWrapper
 from TTGN.utils.utils import get_neighbor_finder
 from common import add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args, parse_args
 
-from CFTGNNExplainer.sampling.embedding import StaticEmbedding
-from CFTGNNExplainer.baseline.ttgnbridge import TTGNBridge
-from CFTGNNExplainer.baseline.pgexplainer import TPGExplainer
+from CFTGNNExplainer.embedding import StaticEmbedding
+from CFTGNNExplainer.implementations.ttgn import TTGNBridge, TTGNWrapper
+from CFTGNNExplainer.implementations.tgn import to_data_object
+from CFTGNNExplainer.explainer.baseline.pgexplainer import TPGExplainer
 from TTGN.model.tgn import TGN
 
 if __name__ == '__main__':
@@ -30,7 +30,7 @@ if __name__ == '__main__':
         device = 'cuda'
 
     tgn = TGN(
-        neighbor_finder=get_neighbor_finder(dataset.to_data_object(), uniform=False),
+        neighbor_finder=get_neighbor_finder(to_data_object(dataset), uniform=False),
         node_features=dataset.node_features,
         edge_features=dataset.edge_features,
         device=torch.device(device),

@@ -3,22 +3,7 @@ import sys
 import numpy as np
 from CFTGNNExplainer.constants import COL_ID, EXPLAINED_EVENT_MEMORY_LABEL, CUR_IT_MIN_EVENT_MEM_LBL
 from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample, calculate_prediction_delta, TreeNode
-from CFTGNNExplainer.sampling.sampler import OneBestEdgeSampler
-
-
-def is_prediction_most_shifted(original_prediction: float, prediction_to_assess: float, previous_delta: float) \
-        -> (bool, float):
-    """
-    Check if the assessed prediction is the most shifted prediction or not
-    @param original_prediction: Original prediction
-    @param prediction_to_assess: Prediction to assess
-    @param previous_delta: The largest previously encountered delta
-    @return: (Boolean whether it is most shifted, Delta between prediction and original prediction)
-    """
-    delta = calculate_prediction_delta(original_prediction, prediction_to_assess)
-    if previous_delta < delta:
-        return True, delta
-    return False, delta
+from CFTGNNExplainer.sampler import OneBestEdgeSampler
 
 
 class GreedyTreeNode(TreeNode):
@@ -60,7 +45,7 @@ class GreedyCFExplainer(Explainer):
                                    prediction=original_prediction)
         max_depth = sys.maxsize
         best_cf_example = None
-        best_non_cf_example = None
+        best_non_cf_example = root_node
 
         if type(sampler) is OneBestEdgeSampler:
             for child_id in sampler.rank_subgraph(base_event_id=explained_event_id, excluded_events=np.array([])):

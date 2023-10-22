@@ -1,7 +1,80 @@
-import numpy as np
 import pandas as pd
-from CFTGNNExplainer.constants import COL_NODE_I, COL_NODE_U, COL_ID, COL_SUBGRAPH_DISTANCE
-from CFTGNNExplainer.data.dataset import ContinuousTimeDynamicGraphDataset
+import numpy as np
+from CFTGNNExplainer.constants import COL_NODE_I, COL_NODE_U, COL_TIMESTAMP, COL_ID, COL_STATE, COL_SUBGRAPH_DISTANCE
+from dataclasses import dataclass
+
+
+@dataclass
+class TrainTestDatasetParameters:
+    training_start: float
+    training_end: float
+    validation_end: float
+    train_items: int
+    validation_items: int
+    test_items: int
+
+
+@dataclass
+class BatchData:
+    source_node_ids: np.ndarray
+    target_node_ids: np.ndarray
+    timestamps: np.ndarray
+    edge_ids: np.ndarray
+
+
+class ContinuousTimeDynamicGraphDataset:
+
+    def __init__(self, events: pd.DataFrame, edge_features: np.ndarray, node_features: np.ndarray, name: str,
+                 directed: bool = False, bipartite: bool = False,
+                 parameters: TrainTestDatasetParameters = TrainTestDatasetParameters(0.2, 0.6, 0.8, 1000, 500, 500)):
+        self.events = events
+        self.edge_features = edge_features
+        self.node_features = node_features
+        self.bipartite = bipartite
+        self.directed = directed
+        self.name = name
+        self.parameters = parameters
+        self.source_node_ids = self.events[COL_NODE_U].to_numpy(dtype=int)
+        self.target_node_ids = self.events[COL_NODE_I].to_numpy(dtype=int)
+        self.timestamps = self.events[COL_TIMESTAMP].to_numpy(dtype=int)
+        self.edge_ids = self.events[COL_ID].to_numpy(dtype=int)
+        assert self.edge_ids[0] == 1, 'Event ids should be one indexed'
+        assert len(np.unique(self.edge_ids)) == len(self.edge_ids), 'All event ids should be unique'
+        assert self.edge_ids[-1] == len(self.edge_ids), 'Some event ids might be missing or duplicates'
+        self.labels = self.events[COL_STATE].to_numpy()
+
+    def get_batch_data(self, start_index: int, end_index: int) -> BatchData:
+        """
+        Get batch data as numpy arrays.
+        @param start_index: Index of the first event in the batch.
+        @param end_index: Index of the last event in the batch.
+        @return: (source node ids, target node ids, timestamps, edge ids)
+        """
+        return BatchData(self.source_node_ids[start_index:end_index], self.target_node_ids[start_index:end_index],
+                         self.timestamps[start_index:end_index], self.edge_ids[start_index:end_index])
+
+    def extract_random_event_ids(self, section: str = 'train') -> [int]:
+        """
+        Create a random set of event ids
+        @param section: section from which ids should be extracted, options: 'train', 'validation', 'test'
+        @return: Ordered random set of event ids in a specified range.
+        """
+        if section == 'train':
+            start = self.parameters.training_start
+            end = self.parameters.training_end
+            size = self.parameters.train_items
+        elif section == 'validation':
+            start = self.parameters.training_end
+            end = self.parameters.validation_end
+            size = self.parameters.validation_items
+        elif section == 'test':
+            start = self.parameters.validation_end
+            end = 1
+            size = self.parameters.test_items
+        else:
+            raise AttributeError(f'"{section}" is an unrecognized value for the "section" parameter.')
+        assert 0 <= start < end <= 1
+        return sorted(np.random.randint(int(len(self.events) * start), int(len(self.events) * end), (size,)))
 
 
 def _extract_center_node_ids(subgraph_events: pd.DataFrame, base_event_ids: [int], directed: bool = False) \

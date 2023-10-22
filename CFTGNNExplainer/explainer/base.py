@@ -7,10 +7,10 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 
-from CFTGNNExplainer.connector.bridge import TGNNBridge
+from CFTGNNExplainer.connector import TGNNBridge
 from CFTGNNExplainer.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
-from CFTGNNExplainer.data.subgraph import SubgraphGenerator
-from CFTGNNExplainer.sampling.sampler import EdgeSampler, RandomEdgeSampler, RecentEdgeSampler, ClosestEdgeSampler, \
+from CFTGNNExplainer.data import SubgraphGenerator
+from CFTGNNExplainer.sampler import EdgeSampler, RandomEdgeSampler, RecentEdgeSampler, ClosestEdgeSampler, \
     PretrainedEdgeSampler, PretrainedEdgeSamplerParameters, OneBestEdgeSampler
 
 

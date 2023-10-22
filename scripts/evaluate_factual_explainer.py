@@ -6,8 +6,9 @@ import numpy as np
 import pandas as pd
 import torch
 
-from CFTGNNExplainer.data.dataset import TrainTestDatasetParameters
-from CFTGNNExplainer.sampling.embedding import StaticEmbedding
+from CFTGNNExplainer.data import TrainTestDatasetParameters
+from CFTGNNExplainer.embedding import StaticEmbedding
+from CFTGNNExplainer.implementations.tgn import to_data_object
 from CFTGNNExplainer.utils import ProgressBar
 from TTGN.model.tgn import TGN
 from TTGN.utils.utils import get_neighbor_finder
@@ -15,10 +16,9 @@ from TTGN.utils.utils import get_neighbor_finder
 from common import add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args, parse_args, \
     get_event_ids_from_file
 
-from CFTGNNExplainer.baseline.ttgnwrapper import TTGNWrapper
-from CFTGNNExplainer.baseline.ttgnbridge import TTGNBridge
-from CFTGNNExplainer.baseline.pgexplainer import TPGExplainer, FactualExplanation
-from CFTGNNExplainer.baseline.tgnnexplainer import TGNNExplainer, TGNNExplainerExplanation
+from CFTGNNExplainer.implementations.ttgn import TTGNBridge, TTGNWrapper
+from CFTGNNExplainer.explainer.baseline.pgexplainer import TPGExplainer, FactualExplanation
+from CFTGNNExplainer.explainer.baseline.tgnnexplainer import TGNNExplainer, TGNNExplainerExplanation
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
@@ -57,6 +57,8 @@ if __name__ == '__main__':
     add_wrapper_model_arguments(parser)
     parser.add_argument('--explained_ids', required=True, type=str,
                         help='Path to the file containing all the event ids that should be explained')
+    parser.add_argument('--wrong_predictions_only', action='store_true',
+                        help='Provide if evaluation should focus on wrong predictions only')
     parser.add_argument('-r', '--results', required=True, type=str,
                         help='Filepath for the evaluation results')
     parser.add_argument('--candidates_size', type=int, default=50,
@@ -83,7 +85,7 @@ if __name__ == '__main__':
         device = 'cuda'
 
     tgn = TGN(
-        neighbor_finder=get_neighbor_finder(dataset.to_data_object(), uniform=False),
+        neighbor_finder=get_neighbor_finder(to_data_object(dataset), uniform=False),
         node_features=dataset.node_features,
         edge_features=dataset.edge_features,
         device=torch.device(device),
@@ -105,7 +107,8 @@ if __name__ == '__main__':
     tgn_wrapper = TTGNWrapper(tgn, dataset, num_hops=2, model_name=dataset.name, device=device, n_neighbors=20,
                               batch_size=32, checkpoint_path=args.model)
 
-    event_ids_to_explain = get_event_ids_from_file(args.explained_ids, dataset, logger)
+    event_ids_to_explain = get_event_ids_from_file(args.explained_ids, dataset, logger, args.wrong_predictions_only,
+                                                   tgn_wrapper)
 
     embedding = StaticEmbedding(dataset, tgn_wrapper)
 

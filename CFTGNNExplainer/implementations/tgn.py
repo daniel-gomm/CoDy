@@ -1,85 +1,79 @@
-import torch
-import pickle
-import time
 import math
-import logging
-import numpy as np
+import pickle
+import random
+import time
 from pathlib import Path
-from TGN.model.tgn import TGN
-from TGN.utils.utils import get_neighbor_finder, RandEdgeSampler, EarlyStopMonitor
-from TGN.utils.data_processing import compute_time_statistics
-from TGN.evaluation.evaluation import eval_edge_prediction
-from CFTGNNExplainer.data.dataset import ContinuousTimeDynamicGraphDataset, BatchData
+
+import numpy as np
+import torch
+
+from CFTGNNExplainer.connector import TGNNWrapper, TGNNBridge
+from CFTGNNExplainer.constants import COL_TIMESTAMP, COL_NODE_I, COL_NODE_U
+from CFTGNNExplainer.data import BatchData, ContinuousTimeDynamicGraphDataset
 from CFTGNNExplainer.utils import ProgressBar, construct_model_path
+from TGN.evaluation.evaluation import eval_edge_prediction
+from TGN.model.tgn import TGN
+from TGN.utils.data_processing import compute_time_statistics, Data
+from TGN.utils.utils import EarlyStopMonitor, RandEdgeSampler, get_neighbor_finder
 
 
-class TGNNWrapper:
-    node_embedding_dimension: int
-    time_embedding_dimension: int
+def to_data_object(dataset: ContinuousTimeDynamicGraphDataset, edges_to_drop: np.ndarray = None) -> Data:
+    """
+    Convert the dataset to a data object that can be used as input for a neighborhood finder
+    @param dataset: Dataset to convert to the data object
+    @param edges_to_drop: Edges that should be excluded from the data
+    @return: Data object of the dataset
+    """
+    if edges_to_drop is not None:
+        edge_mask = ~np.isin(dataset.edge_ids, edges_to_drop)
+        return Data(dataset.source_node_ids[edge_mask], dataset.target_node_ids[edge_mask],
+                    dataset.timestamps[edge_mask], dataset.edge_ids[edge_mask], dataset.labels[edge_mask])
+    return Data(dataset.source_node_ids, dataset.target_node_ids, dataset.timestamps, dataset.edge_ids, dataset.labels)
 
-    def __init__(self, model: torch.nn.Module, dataset: ContinuousTimeDynamicGraphDataset, num_hops: int,
-                 model_name: str, device: str = 'cpu'):
-        self.num_hops = num_hops
-        self.model = model
-        self.dataset = dataset
-        self.name = model_name
-        self.device = device
-        self.latest_event_id = 0
-        self.evaluation_mode = False
-        logging.basicConfig(level=logging.INFO)
-        self.logger = logging.getLogger()
 
-    def rollout_until_event(self, event_id: int = None, batch_data: BatchData = None,
-                            progress_bar: ProgressBar = None) -> None:
-        raise NotImplementedError
+class TGNBridge(TGNNBridge):
 
-    def compute_embeddings(self, source_nodes, target_nodes, edge_times, edge_ids, negative_nodes=None):
-        raise NotImplementedError
+    def __init__(self, model: TGNNWrapper):
+        super().__init__(model=model)
+        self.model.reset_model()
+        self.model.reset_latest_event_id()  # Reset to a clean state
 
-    def encode_timestamps(self, timestamps: np.ndarray):
-        raise NotImplementedError
+    def initialize(self, event_id: int, show_progress: bool = False, memory_label: str = None):
+        if memory_label is not None and memory_label in self.memory_backups_map.keys():
+            if show_progress:
+                print(f'Restoring memory with label "{memory_label}"')
+            memory_backup, backup_event_id = self.memory_backups_map[memory_label]
+            if backup_event_id == event_id:
+                self.model.restore_memory(memory_backup, event_id)
+                return
+            else:  # This should not happen. If this happens causes the model to reprocess everything from the beginning
+                self.logger.warning('The provided event ID does not match the event id of the backup. '
+                                    'Recreating the state by processing from the beginning.')
+                self.reset_model()
 
-    def compute_edge_probabilities(self, source_nodes: np.ndarray, target_nodes: np.ndarray,
-                                   edge_timestamps: np.ndarray, edge_ids: np.ndarray,
-                                   negative_nodes: np.ndarray | None = None, result_as_logit: bool = False,
-                                   perform_memory_update: bool = True):
-        raise NotImplementedError
+        progress_bar = None
+        if show_progress:
+            progress_bar = ProgressBar(0, prefix='Rolling out events')
+        self.model.rollout_until_event(event_id, progress_bar=progress_bar)
+        if progress_bar is not None:
+            progress_bar.close()
+        if memory_label is not None:
+            current_memory = self.model.get_memory()
+            self.memory_backups_map[memory_label] = (current_memory, event_id)
+            if show_progress:
+                print(f'Backed up memory with label "{memory_label}"')
 
-    def compute_edge_probabilities_for_subgraph(self, event_id, edges_to_drop: np.ndarray,
-                                                result_as_logit: bool = False) -> (torch.Tensor, torch.Tensor):
-        raise NotImplementedError
+    def predict(self, event_id: int, result_as_logit: bool = False):
+        source_node, target_node, timestamp, edge_id = self.model.extract_event_information(event_id)
+        return self.model.compute_edge_probabilities(source_nodes=source_node,
+                                                     target_nodes=target_node,
+                                                     edge_timestamps=timestamp,
+                                                     edge_ids=edge_id,
+                                                     result_as_logit=result_as_logit,
+                                                     perform_memory_update=False)
 
-    def get_memory(self):
-        raise NotImplementedError
-
-    def detach_memory(self):
-        raise NotImplementedError
-
-    def restore_memory(self, memory_backup, event_id):
-        raise NotImplementedError
-
-    def reset_model(self):
-        raise NotImplementedError
-
-    def activate_evaluation_mode(self):
-        self.model.eval()
-        self.evaluation_mode = True
-
-    def activate_train_mode(self):
-        self.model.train()
-        self.evaluation_mode = False
-
-    def reset_latest_event_id(self, value: int = None):
-        if value is not None:
-            self.latest_event_id = value
-        else:
-            self.latest_event_id = 0
-
-    def extract_event_information(self, event_ids: int | np.ndarray):
-        edge_mask = np.isin(self.dataset.edge_ids, event_ids)
-        source_nodes, target_nodes, timestamps = self.dataset.source_node_ids[edge_mask], \
-            self.dataset.target_node_ids[edge_mask], self.dataset.timestamps[edge_mask]
-        return source_nodes, target_nodes, timestamps, event_ids
+    def post_batch_cleanup(self):
+        self.model.detach_memory()
 
 
 class TGNWrapper(TGNNWrapper):
@@ -130,7 +124,8 @@ class TGNWrapper(TGNNWrapper):
     def compute_embeddings(self, source_nodes, target_nodes, edge_times, edge_ids, negative_nodes=None):
         src_node_embedding, target_node_embedding, _ = (self.model.
                                                         compute_temporal_embeddings(source_nodes, target_nodes,
-                                                                                    negative_nodes, edge_times, edge_ids,
+                                                                                    negative_nodes, edge_times,
+                                                                                    edge_ids,
                                                                                     n_neighbors=self.n_neighbors,
                                                                                     perform_memory_update=False))
         return src_node_embedding, target_node_embedding
@@ -157,7 +152,7 @@ class TGNWrapper(TGNNWrapper):
         source_nodes, target_nodes, timestamps, edge_ids = self.extract_event_information(edge_ids)
         # Insert a new neighborhood finder so that the model does not consider dropped edges
         original_ngh_finder = self.model.neighbor_finder
-        self.model.set_neighbor_finder(get_neighbor_finder(self.dataset.to_data_object(edges_to_drop=edges_to_drop),
+        self.model.set_neighbor_finder(get_neighbor_finder(to_data_object(self.dataset, edges_to_drop=edges_to_drop),
                                                            uniform=False))
         # Rollout the events from the subgraph
         self.rollout_until_event(batch_data=BatchData(source_nodes, target_nodes, timestamps, edge_ids))
@@ -191,9 +186,9 @@ class TGNWrapper(TGNNWrapper):
         # Adapted from train_self_supervised from https://github.com/twitter-research/tgn
         Path(results_path.rsplit('/', 1)[0] + '/').mkdir(parents=True, exist_ok=True)
         node_features, edge_features, full_data, train_data, val_data, test_data, new_node_val_data, \
-            new_node_test_data = self.dataset.get_training_data(randomize_features=False, validation_fraction=0.15,
-                                                                test_fraction=0.15, new_test_nodes_fraction=0.1,
-                                                                different_new_nodes_between_val_and_test=False)
+            new_node_test_data = self.get_training_data(randomize_features=False, validation_fraction=0.15,
+                                                        test_fraction=0.15, new_test_nodes_fraction=0.1,
+                                                        different_new_nodes_between_val_and_test=False)
 
         train_neighborhood_finder = get_neighbor_finder(train_data, uniform=False)
 
@@ -388,3 +383,109 @@ class TGNWrapper(TGNNWrapper):
         self.model.memory.restore_memory(val_memory_backup)
         torch.save(self.model.state_dict(), construct_model_path(model_path, self.name, self.dataset.name))
         self.logger.info('TGN model saved')
+
+    def get_training_data(self, randomize_features: bool = False, validation_fraction: float = 0.15,
+                          test_fraction: float = 0.15, new_test_nodes_fraction: float = 0.1,
+                          different_new_nodes_between_val_and_test: bool = False):
+        dataset = self.dataset
+        # Function adapted from data_processing.py in https://github.com/twitter-research/tgn
+        node_features = dataset.node_features
+        if randomize_features:
+            node_features = np.random.rand(dataset.node_features.shape[0], node_features.shape[1])
+
+        val_time, test_time = list(np.quantile(dataset.events[COL_TIMESTAMP],
+                                               [1 - (validation_fraction + test_fraction), 1 - test_fraction]))
+
+        full_data = Data(dataset.source_node_ids, dataset.target_node_ids, dataset.timestamps, dataset.edge_ids,
+                         dataset.labels)
+
+        node_set = set(dataset.source_node_ids) | set(dataset.target_node_ids)
+        unique_nodes = len(node_set)
+
+        # Compute nodes which appear at test time
+        test_node_set = set(dataset.source_node_ids[dataset.timestamps > val_time]) \
+            .union(set(dataset.target_node_ids[dataset.timestamps > val_time]))
+        # Sample nodes which we keep as new nodes (to test inductiveness), so than we have to remove all
+        # their edges from training
+        new_test_node_set = set(random.sample(sorted(test_node_set), int(new_test_nodes_fraction * unique_nodes)))
+
+        # Mask saying for each source and destination whether they are new test nodes
+        new_test_source_mask = dataset.events[COL_NODE_I].map(lambda x: x in new_test_node_set).values
+        new_test_destination_mask = dataset.events[COL_NODE_U].map(lambda x: x in new_test_node_set).values
+
+        # Mask which is true for edges with both destination and source not being new test nodes (because
+        # we want to remove all edges involving any new test node)
+        observed_edges_mask = np.logical_and(~new_test_source_mask, ~new_test_destination_mask)
+
+        # For train, we keep edges happening before the validation time which do not involve any new node
+        # used for inductiveness
+        train_mask = np.logical_and(dataset.timestamps <= val_time, observed_edges_mask)
+
+        train_data = Data(dataset.source_node_ids[train_mask], dataset.target_node_ids[train_mask],
+                          dataset.timestamps[train_mask],
+                          dataset.edge_ids[train_mask], dataset.labels[train_mask])
+
+        # define the new nodes sets for testing inductiveness of the model
+        train_node_set = set(train_data.sources).union(train_data.destinations)
+        assert len(train_node_set & new_test_node_set) == 0
+        new_node_set = node_set - train_node_set
+
+        val_mask = np.logical_and(dataset.timestamps <= test_time, dataset.timestamps > val_time)
+        test_mask = dataset.timestamps > test_time
+
+        if different_new_nodes_between_val_and_test:
+            n_new_nodes = len(new_test_node_set) // 2
+            val_new_node_set = set(list(new_test_node_set)[:n_new_nodes])
+            test_new_node_set = set(list(new_test_node_set)[n_new_nodes:])
+
+            edge_contains_new_val_node_mask = np.array(
+                [(a in val_new_node_set or b in val_new_node_set) for a, b in
+                 zip(dataset.source_node_ids, dataset.target_node_ids)])
+            edge_contains_new_test_node_mask = np.array(
+                [(a in test_new_node_set or b in test_new_node_set) for a, b in
+                 zip(dataset.source_node_ids, dataset.target_node_ids)])
+            new_node_val_mask = np.logical_and(val_mask, edge_contains_new_val_node_mask)
+            new_node_test_mask = np.logical_and(test_mask, edge_contains_new_test_node_mask)
+        else:
+            edge_contains_new_node_mask = np.array(
+                [(a in new_node_set or b in new_node_set) for a, b in
+                 zip(dataset.source_node_ids, dataset.target_node_ids)])
+            new_node_val_mask = np.logical_and(val_mask, edge_contains_new_node_mask)
+            new_node_test_mask = np.logical_and(test_mask, edge_contains_new_node_mask)
+
+        # validation and test with all edges
+        val_data = Data(dataset.source_node_ids[val_mask], dataset.target_node_ids[val_mask],
+                        dataset.timestamps[val_mask],
+                        dataset.edge_ids[val_mask], dataset.labels[val_mask])
+
+        test_data = Data(dataset.source_node_ids[test_mask], dataset.target_node_ids[test_mask],
+                         dataset.timestamps[test_mask],
+                         dataset.edge_ids[test_mask], dataset.labels[test_mask])
+
+        # validation and test with edges that at least has one new node (not in training set)
+        new_node_val_data = Data(dataset.source_node_ids[new_node_val_mask], dataset.target_node_ids[new_node_val_mask],
+                                 dataset.timestamps[new_node_val_mask],
+                                 dataset.edge_ids[new_node_val_mask], dataset.labels[new_node_val_mask])
+
+        new_node_test_data = Data(dataset.source_node_ids[new_node_test_mask],
+                                  dataset.target_node_ids[new_node_test_mask],
+                                  dataset.timestamps[new_node_test_mask], dataset.edge_ids[new_node_test_mask],
+                                  dataset.labels[new_node_test_mask])
+
+        print("The dataset has {} interactions, involving {} different nodes".format(full_data.n_interactions,
+                                                                                     full_data.n_unique_nodes))
+        print("The training dataset has {} interactions, involving {} different nodes".format(
+            train_data.n_interactions, train_data.n_unique_nodes))
+        print("The validation dataset has {} interactions, involving {} different nodes".format(
+            val_data.n_interactions, val_data.n_unique_nodes))
+        print("The test dataset has {} interactions, involving {} different nodes".format(
+            test_data.n_interactions, test_data.n_unique_nodes))
+        print("The new node validation dataset has {} interactions, involving {} different nodes".format(
+            new_node_val_data.n_interactions, new_node_val_data.n_unique_nodes))
+        print("The new node test dataset has {} interactions, involving {} different nodes".format(
+            new_node_test_data.n_interactions, new_node_test_data.n_unique_nodes))
+        print("{} nodes were used for the inductive testing, i.e. are never seen during training".format(
+            len(new_test_node_set)))
+
+        return (node_features, dataset.edge_features, full_data, train_data, val_data, test_data, new_node_val_data,
+                new_node_test_data)
