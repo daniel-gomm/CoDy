@@ -100,11 +100,11 @@ class MCTSTreeNode(TreeNode):
         if not self.is_leaf():
             # Here the exploitation score could be updates. However, this seems to make the search performance worse
 
+            self.exploitation_score = max([self.exploitation_score] +
+                                          [child.exploitation_score for child in self.children if child.expanded])
+            # if self.exploitation_score == 0:
             # self.exploitation_score = max(0.0, np.average([child.exploitation_score for child in self.children
-            #                                                if child.expanded]))
-            if self.exploitation_score == 0:
-                self.exploitation_score = max(0.0, np.average([child.exploitation_score for child in self.children
-                                                               if child.expanded]))
+            #                                              if child.expanded]))
 
         self.number_of_selections += 1
         if self.parent is not None:
@@ -131,7 +131,8 @@ class CFTGNNExplainer(Explainer):
 
         self._expand_node(explained_edge_id, node_to_expand, prediction, sampler)
 
-    def _expand_node(self, explained_edge_id: int, node_to_expand: MCTSTreeNode, prediction: float, sampler: EdgeSampler):
+    def _expand_node(self, explained_edge_id: int, node_to_expand: MCTSTreeNode, prediction: float,
+                     sampler: EdgeSampler):
         self.known_states[node_to_expand.hash()] = prediction
 
         if node_to_expand.is_counterfactual:
