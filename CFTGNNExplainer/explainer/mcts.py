@@ -36,10 +36,13 @@ class MCTSTreeNode(TreeNode):
     sampling_rank: int
     prediction: float | None
 
-    def __init__(self, edge_id: int, parent: MCTSTreeNode | None, original_prediction: float, sampling_rank: int):
+    def __init__(self, edge_id: int, parent: MCTSTreeNode | None, original_prediction: float, sampling_rank: int,
+                 alpha: float = 2.0, beta: float = 1.0):
         super().__init__(edge_id, parent, original_prediction)
         self.sampling_rank = sampling_rank
         self.number_of_selections: int = 1
+        self.alpha = alpha
+        self.beta = beta
         if self.parent is None:
             self.depth = 0
         else:
@@ -49,8 +52,8 @@ class MCTSTreeNode(TreeNode):
         """
         Calculate the search score which balances exploration with exploitation
         """
-        exploration_score = np.sqrt(2) * np.sqrt(np.log(self.parent.number_of_selections) / self.number_of_selections)
-        return self.exploitation_score + exploration_score
+        exploration_score = np.sqrt(np.log(self.parent.number_of_selections) / self.number_of_selections)
+        return self.alpha * self.exploitation_score + self.beta * exploration_score
 
     def select_next_leaf(self, max_depth: int) -> MCTSTreeNode:
         """
@@ -97,16 +100,25 @@ class MCTSTreeNode(TreeNode):
         """
         Propagate the information that a node is selected backwards and update scores
         """
+        self.number_of_selections += 1
         if not self.is_leaf():
             # Here the exploitation score could be updates. However, this seems to make the search performance worse
 
-            self.exploitation_score = max([self.exploitation_score] +
-                                          [child.exploitation_score for child in self.children if child.expanded])
-            # if self.exploitation_score == 0:
-            # self.exploitation_score = max(0.0, np.average([child.exploitation_score for child in self.children
-            #                                              if child.expanded]))
+            # self.exploitation_score = max([self.exploitation_score] +
+            #                              [child.exploitation_score for child in self.children if child.expanded])
+            if len(self.children) > 0:
+                self.exploitation_score = max(0.0,
+                                              (calculate_prediction_delta(self.original_prediction, self.prediction) /
+                                               abs(self.original_prediction)))
+                expanded_children = [child for child in self.children if child.expanded]
+                if len(expanded_children) > 0:
+                    selections_counter = self.number_of_selections
+                    self.exploitation_score = self.exploitation_score * self.number_of_selections
+                    for child in expanded_children:
+                        self.exploitation_score += child.exploitation_score * child.number_of_selections
+                        selections_counter += child.number_of_selections
+                    self.exploitation_score = self.exploitation_score / selections_counter
 
-        self.number_of_selections += 1
         if self.parent is not None:
             self.parent.expansion_backpropagation()
 
