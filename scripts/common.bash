@@ -18,6 +18,7 @@ COUNTERFACTUAL_EXPLAINER_TYPES=("greedy" "searching" "cftgnnexplainer")
 EXPLAINER_TYPES=("${FACTUAL_EXPLAINER_TYPES[@]}" "${COUNTERFACTUAL_EXPLAINER_TYPES[@]}")
 
 SAMPLER_TYPES=("random" "recent" "closest" "pretrained" "1-best")
+ALL_SAMPLER_TYPES=("${SAMPLER_TYPES[@]}" "all")
 
 
 function value_in_array() {

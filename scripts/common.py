@@ -14,6 +14,8 @@ from CFTGNNExplainer.data import ContinuousTimeDynamicGraphDataset, TrainTestDat
 from TGN.model.tgn import TGN
 from TGN.utils.utils import get_neighbor_finder
 
+SAMPLERS = ['random', 'recent', 'closest', 'pretrained', '1-best']
+
 
 def parse_args(parser: ArgumentParser) -> Namespace:
     try:
@@ -145,7 +147,7 @@ def sample_wrong_predictions(tgn_wrapper: TGNWrapper | TTGNWrapper):
     event_ids = np.concatenate(event_ids)
 
     results = pd.DataFrame({'edge_ids': event_ids.flatten(), 'predictions': all_predictions.flatten()})
-    wrong_results = results[results['predictions'] < 0]
+    wrong_results = results[results['predictions'] < - 0.2]  # Wrong predictions with some margin
     filtered_results = wrong_results[
         wrong_results['edge_ids'] > int(tgn_wrapper.dataset.parameters.training_start * max_event_id)]
     filtered_results = filtered_results[
