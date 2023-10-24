@@ -366,7 +366,6 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
                                             memory_label: str = EXPLAINED_EVENT_MEMORY_LABEL) -> (float, int, int):
         full_hash = f'{explained_event_id}-{node_to_expand.hash()}'
         if full_hash in EVALUATION_STATE_CACHE.keys():
-            print('Boom')
             result = EVALUATION_STATE_CACHE[full_hash]
             return result.prediction, result.prediction_time_ns, result.prediction_time_ns
         else:
