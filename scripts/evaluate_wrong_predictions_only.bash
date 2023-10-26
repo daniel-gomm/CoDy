@@ -27,18 +27,18 @@ evaluate_explainer() {
     ;;
   greedy)
     echo "Selected sampler $3"
-    SAMPLER_MODEL_PATH="$PARENT_DIR/resources/models/$1/sampler/$1_final.pth"
-    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer greedy --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR/results_$1_$2_$3.csv" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 75 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only
+    SAMPLER_MODEL_PATH="$PARENT_DIR/resources/models/$1/sampler/$1_dynamic_sampler.pth"
+    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer greedy --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 50 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only
     ;;
   searching)
     echo "Selected sampler $3"
-    SAMPLER_MODEL_PATH="$PARENT_DIR/resources/models/$1/sampler/$1_final.pth"
-    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer searching --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR/results_$1_$2_$3.csv" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 75 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only
+    SAMPLER_MODEL_PATH="$PARENT_DIR/resources/models/$1/sampler/$1_dynamic_sampler.pth"
+    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer searching --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 50 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only
     ;;
   cftgnnexplainer)
     echo "Selected sampler $3"
-    SAMPLER_MODEL_PATH="$PARENT_DIR/resources/models/$1/sampler/$1_final.pth"
-    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer cftgnnexplainer --number_of_explained_events 10 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR/results_$1_$2_$3.csv" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 75 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only
+    SAMPLER_MODEL_PATH="$PARENT_DIR/resources/models/$1/sampler/$1_dynamic_sampler.pth"
+    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer cftgnnexplainer --number_of_explained_events 10 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 50 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only
     ;;
   *)
     show_help
@@ -51,7 +51,7 @@ show_help() {
   echo -e "
 Evaluation script
 
-Usage: bash $SCRIPT_DIR/train_pg_explainer.bash ${RED}DATASET-NAME EXPLAINER-NAME [SAMPLER-NAME]${NC}
+Usage: bash $SCRIPT_DIR/evaluate_wrong_predictions_only.bash ${RED}DATASET-NAME EXPLAINER-NAME [SAMPLER-NAME]${NC}
 
 For the ${RED}DATASET-NAME${NC} parameter provide the name of any of the preprocessed datasets.
 Possible values: ${CYAN}[${DATASET_NAMES[*]}]${NC}
@@ -68,10 +68,21 @@ if [ $# -lt 2 ]; then
 else
   test_exists "$1" "${DATASET_NAMES[@]}"
   test_exists "$2" "${EXPLAINER_TYPES[@]}"
-  sampler_type="random"
   if [ $# -gt 2 ]; then
-    test_exists "$3" "${SAMPLER_TYPES[@]}"
-    sampler_type="$3"
+    test_exists "$3" "${ALL_SAMPLER_TYPES[@]}"
+    echo "Evaluating explainer $2 with sampler $3 on dataset $1"
+    evaluate_explainer "$1" "$2" "$3"
+  elif value_in_array "$2" "${FACTUAL_EXPLAINER_TYPES[@]}"; then
+    echo "Evaluating explainer $2 on dataset $1"
+    evaluate_explainer "$1" "$2"
+  else
+    for sampler in "${SAMPLER_TYPES[@]}"; do
+      if [ -f "$RESULTS_DIR/$1/$2/results_$1_$2_$sampler.csv" ]; then
+        echo "Results for sampler $sampler already exist."
+      else
+        echo "Evaluating explainer $2 with sampler $sampler on dataset $1"
+        evaluate_explainer "$1" "$2" "$sampler"
+      fi
+    done
   fi
-  evaluate_explainer "$1" "$2" "$sampler_type"
 fi

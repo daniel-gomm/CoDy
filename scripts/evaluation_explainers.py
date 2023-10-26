@@ -7,9 +7,9 @@ import time
 
 from CFTGNNExplainer.connector import TGNNBridge
 from CFTGNNExplainer.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
-from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample
+from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample, TreeNode
 from CFTGNNExplainer.explainer.greedy import GreedyCFExplainer, GreedyTreeNode
-from CFTGNNExplainer.sampling.sampler import EdgeSampler, PretrainedEdgeSamplerParameters, OneBestEdgeSampler
+from CFTGNNExplainer.sampler import EdgeSampler, PretrainedEdgeSamplerParameters, OneBestEdgeSampler
 from CFTGNNExplainer.explainer.searching import (BatchSearchTreeNode, select_best_cf_example,
                                                  find_best_non_counterfactual_example, SearchingCFExplainer)
 from CFTGNNExplainer.explainer.mcts import CFTGNNExplainer, MCTSTreeNode
@@ -17,6 +17,14 @@ from CFTGNNExplainer.explainer.mcts import find_best_non_counterfactual_example 
 
 LAST_PREDICTION_MEMORY_LABEL = 'last_original_score'
 NEW_PREDICTION_MEMORY_LABEL = 'new_original_score'
+
+EVALUATION_STATE_CACHE = {}
+
+
+@dataclass
+class PredictionResult:
+    prediction_time_ns: int
+    prediction: float
 
 
 @dataclass
@@ -40,6 +48,7 @@ class EvaluationCounterFactualExample(CounterFactualExample):
 
 
 class EvaluationExplainer(Explainer):
+    explanation_results_list: List[EvaluationCounterFactualExample] = []
 
     def get_evaluation_original_prediction(self, explained_event_id: int, last_event_id: int) -> float:
         """
@@ -91,6 +100,30 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
                                                   pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.last_min_id = 0
 
+    def create_child_node(self, node_to_expand: TreeNode, memory_label: str, explained_event_id: int,
+                          candidate_event_id: int, sampled_edge_ids):
+        child_hash = f'{explained_event_id}-{node_to_expand.hash()}-{candidate_event_id}'
+        exp_cache_save_time = 0
+        if child_hash in EVALUATION_STATE_CACHE.keys():
+            result = EVALUATION_STATE_CACHE[child_hash]
+            oracle_call_duration = result.prediction_time_ns
+            exp_cache_save_time = result.prediction_time_ns
+            prediction = result.prediction
+        else:
+            oracle_call_start = time.time_ns()
+            prediction = self.calculate_subgraph_prediction(candidate_events=sampled_edge_ids,
+                                                            cf_example_events=node_to_expand.get_parent_ids() +
+                                                                              [node_to_expand.edge_id],
+                                                            explained_event_id=explained_event_id,
+                                                            candidate_event_id=candidate_event_id,
+                                                            memory_label=memory_label)
+            oracle_call_duration = time.time_ns() - oracle_call_start
+            EVALUATION_STATE_CACHE[child_hash] = PredictionResult(oracle_call_duration, prediction)
+        child_node = GreedyTreeNode(candidate_event_id, parent=node_to_expand,
+                                    original_prediction=node_to_expand.original_prediction, prediction=prediction)
+        node_to_expand.children.append(child_node)
+        return child_node, oracle_call_duration, exp_cache_save_time
+
     def evaluate_explanation(self, explained_event_id: int,
                              original_prediction: float) -> EvaluationCounterFactualExample:
         if original_prediction is None:
@@ -101,25 +134,23 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
         statistics = {}
         oracle_calls = 0
         oracle_call_time = 0
+        cache_saved_oracle_call_time = 0
         start_time = time.time_ns()
         min_event_id = sampler.subgraph[COL_ID].min() - 1
         root_node = GreedyTreeNode(explained_event_id, None, original_prediction=original_prediction,
                                    prediction=original_prediction)
         max_depth = sys.maxsize
         best_cf_example = None
-        best_non_cf_example = None
+        best_non_cf_example = root_node
         skip_search = False
 
         if type(sampler) is OneBestEdgeSampler:
             for child_id in sampler.rank_subgraph(base_event_id=explained_event_id, excluded_events=np.array([])):
-                prediction = self.calculate_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID],
-                                                                cf_example_events=[],
-                                                                explained_event_id=explained_event_id,
-                                                                candidate_event_id=child_id,
-                                                                memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
-                child_node = GreedyTreeNode(child_id, parent=root_node, original_prediction=original_prediction,
-                                            prediction=prediction)
-                root_node.children.append(child_node)
+                child_node, _, _ = self.create_child_node(node_to_expand=root_node,
+                                                          memory_label=EXPLAINED_EVENT_MEMORY_LABEL,
+                                                          explained_event_id=explained_event_id,
+                                                          candidate_event_id=child_id,
+                                                          sampled_edge_ids=sampler.subgraph[COL_ID])
                 if child_node.is_counterfactual:
                     if best_cf_example is None:
                         best_cf_example = child_node
@@ -150,18 +181,13 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
             self.tgnn_bridge.initialize(min_event_id, show_progress=False,
                                         memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
             for candidate_event_id in sampled_edge_ids:
-                candidate_iteration_start_time = time.time_ns()
-                prediction = self.calculate_subgraph_prediction(candidate_events=sampled_edge_ids,
-                                                                cf_example_events=node_to_expand.get_parent_ids() +
-                                                                                  [node_to_expand.edge_id],
-                                                                explained_event_id=explained_event_id,
-                                                                candidate_event_id=candidate_event_id,
-                                                                memory_label=CUR_IT_MIN_EVENT_MEM_LBL)
-                oracle_call_time += time.time_ns() - candidate_iteration_start_time
-                oracle_calls += 1
-                child_node = GreedyTreeNode(candidate_event_id, parent=node_to_expand,
-                                            original_prediction=original_prediction, prediction=prediction)
-                node_to_expand.children.append(child_node)
+                child_node, oracle_call_duration, exp_cache_save_time = (
+                    self.create_child_node(node_to_expand, memory_label=CUR_IT_MIN_EVENT_MEM_LBL,
+                                           explained_event_id=explained_event_id,
+                                           candidate_event_id=candidate_event_id,
+                                           sampled_edge_ids=sampled_edge_ids))
+                oracle_call_time += oracle_call_duration
+                cache_saved_oracle_call_time += exp_cache_save_time
                 if child_node.is_counterfactual:
                     if best_cf_example is None:
                         best_cf_example = child_node
@@ -182,8 +208,8 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
         self.tgnn_bridge.reset_model()
         end_time = time.time_ns()
         timings['oracle_call_duration'] = oracle_call_time
-        timings['explanation_duration'] = end_time - start_time - oracle_call_time
-        timings['total_duration'] = end_time - start_time
+        timings['explanation_duration'] = end_time - start_time - oracle_call_time + cache_saved_oracle_call_time
+        timings['total_duration'] = end_time - start_time + cache_saved_oracle_call_time
         statistics['oracle_calls'] = oracle_calls
         statistics['candidate_size'] = len(sampler.subgraph)
         statistics['candidates'] = sampler.subgraph[COL_ID].to_list()
@@ -335,17 +361,32 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
                                      pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.last_min_id = 0
 
+    def _get_evaluation_subgraph_prediction(self, candidate_events: np.ndarray, node_to_expand: MCTSTreeNode,
+                                            explained_event_id: int,
+                                            memory_label: str = EXPLAINED_EVENT_MEMORY_LABEL) -> (float, int, int):
+        full_hash = f'{explained_event_id}-{node_to_expand.hash()}'
+        if full_hash in EVALUATION_STATE_CACHE.keys():
+            result = EVALUATION_STATE_CACHE[full_hash]
+            return result.prediction, result.prediction_time_ns, result.prediction_time_ns
+        else:
+            oracle_call_start_time = time.time_ns()
+            prediction = self.calculate_subgraph_prediction(candidate_events=candidate_events,
+                                                            cf_example_events=node_to_expand.get_parent_ids(),
+                                                            explained_event_id=explained_event_id,
+                                                            candidate_event_id=node_to_expand.edge_id,
+                                                            memory_label=memory_label)
+            oracle_call_time = time.time_ns() - oracle_call_start_time
+            EVALUATION_STATE_CACHE[full_hash] = PredictionResult(oracle_call_time, prediction)
+            return prediction, oracle_call_time, 0
+
     def _run_node_expansion(self, explained_edge_id: int, node_to_expand: MCTSTreeNode, sampler: EdgeSampler):
-        edge_ids_to_exclude = node_to_expand.get_parent_ids()
-        oracle_call_start_time = time.time_ns()
-        prediction = self.calculate_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID],
-                                                        cf_example_events=edge_ids_to_exclude,
-                                                        explained_event_id=explained_edge_id,
-                                                        candidate_event_id=node_to_expand.edge_id,
-                                                        memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
-        oracle_call_time = time.time_ns() - oracle_call_start_time
+        prediction, oracle_call_time, cache_save_time = (
+            self._get_evaluation_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID],
+                                                     node_to_expand=node_to_expand,
+                                                     explained_event_id=explained_edge_id,
+                                                     memory_label=EXPLAINED_EVENT_MEMORY_LABEL))
         self._expand_node(explained_edge_id, node_to_expand, prediction, sampler)
-        return oracle_call_time
+        return oracle_call_time, cache_save_time
 
     def evaluate_explanation(self, explained_event_id: int, original_prediction: float) -> (
             EvaluationCounterFactualExample):
@@ -357,6 +398,7 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
         statistics = {}
         oracle_calls = 0
         oracle_call_time = 0
+        cache_saved_oracle_call_time = 0
         encountered_cf_examples = 0
         start_time = time.time_ns()
 
@@ -372,7 +414,9 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
         if type(sampler) is OneBestEdgeSampler:
             for child in root_node.children:
                 # Expand all children
-                oracle_call_time += self._run_node_expansion(explained_event_id, child, sampler)
+                exp_oracle_call_time, exp_cache_save_time = self._run_node_expansion(explained_event_id, child, sampler)
+                oracle_call_time += exp_oracle_call_time
+                cache_saved_oracle_call_time += exp_cache_save_time
                 oracle_calls += 1
                 if child.is_counterfactual:
                     if best_cf_example is None:
@@ -408,10 +452,15 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
                 if self.verbose:
                     self.logger.info('Search Tree is fully expanded. Concluding search.')
                 break  # No nodes are selectable, meaning that we can conclude the search
+            exp_oracle_call_time, exp_cache_save_time = self._run_node_expansion(explained_event_id, node_to_expand,
+                                                                                 sampler)
             if self.verbose:
-                self.logger.info(f'Selected node {node_to_expand.edge_id} at depth {node_to_expand.depth}, hash: '
+                self.logger.info(f'Selected node {node_to_expand.edge_id} at depth {node_to_expand.depth}, '
+                                 f'prediction: {node_to_expand.prediction}, '
+                                 f'exploitation score: {node_to_expand.exploitation_score}, hash: '
                                  f'{node_to_expand.hash()}')
-            oracle_call_time += self._run_node_expansion(explained_event_id, node_to_expand, sampler)
+            oracle_call_time += exp_oracle_call_time
+            cache_saved_oracle_call_time += exp_cache_save_time
             oracle_calls += 1
             if node_to_expand.is_counterfactual:
                 if best_cf_example is None or best_cf_example.depth > node_to_expand.depth:
@@ -436,8 +485,8 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
         self.known_states = {}
         end_time = time.time_ns()
         timings['oracle_call_duration'] = oracle_call_time
-        timings['explanation_duration'] = end_time - start_time - oracle_call_time
-        timings['total_duration'] = end_time - start_time
+        timings['explanation_duration'] = end_time - start_time - oracle_call_time + cache_saved_oracle_call_time
+        timings['total_duration'] = end_time - start_time + cache_saved_oracle_call_time
         statistics['oracle_calls'] = oracle_calls
         statistics['candidate_size'] = len(sampler.subgraph)
         statistics['candidates'] = sampler.subgraph[COL_ID].to_list()
