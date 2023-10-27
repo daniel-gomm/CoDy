@@ -38,9 +38,9 @@ class ContinuousTimeDynamicGraphDataset:
         self.target_node_ids = self.events[COL_NODE_I].to_numpy(dtype=int)
         self.timestamps = self.events[COL_TIMESTAMP].to_numpy(dtype=int)
         self.edge_ids = self.events[COL_ID].to_numpy(dtype=int)
-        assert self.edge_ids[0] == 1, 'Event ids should be one indexed'
+        assert self.edge_ids[0] == 0, 'Event ids should start with zero index'
         assert len(np.unique(self.edge_ids)) == len(self.edge_ids), 'All event ids should be unique'
-        assert self.edge_ids[-1] == len(self.edge_ids), 'Some event ids might be missing or duplicates'
+        assert self.edge_ids[-1] == len(self.edge_ids) - 1, 'Some event ids might be missing or duplicates'
         self.labels = self.events[COL_STATE].to_numpy()
 
     def get_batch_data(self, start_index: int, end_index: int) -> BatchData:

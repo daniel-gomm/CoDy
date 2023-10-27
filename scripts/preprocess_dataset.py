@@ -33,10 +33,6 @@ def _reindex_vertices(dataset: pd.DataFrame, bipartite: bool) -> pd.DataFrame:
         dataset_copy[COL_NODE_U] = dataset_copy[COL_NODE_U] - dataset_copy[COL_NODE_U].min()
         dataset_copy[COL_NODE_I] += dataset[COL_NODE_U].max() + 1
 
-    dataset_copy[COL_NODE_I] += 1
-    dataset_copy[COL_NODE_U] += 1
-    dataset_copy[COL_ID] += 1
-
     return dataset_copy
 
 
