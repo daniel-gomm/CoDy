@@ -245,7 +245,7 @@ class MCTS(object):
         beta = -3
 
         max_event_idx = max(self.root.coalition)
-        curr_t = self.events[COL_TIMESTAMP][max_event_idx - 1]
+        curr_t = self.events[COL_TIMESTAMP][max_event_idx]
         ts = self.events[COL_TIMESTAMP][self.events['e_idx'].isin(node.coalition)].values
         delta_ts = curr_t - ts
         t_score_exp = np.exp(beta * delta_ts)
