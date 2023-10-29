@@ -82,8 +82,8 @@ class GreedyCFExplainer(Explainer):
             sampled_edge_ids = sampler.sample(explained_event_id,
                                               excluded_events=np.array(node_to_expand.get_parent_ids()),
                                               size=self.sample_size)
-            self.tgnn_bridge.initialize(min_event_id, show_progress=False,
-                                        memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
+            self.tgnn.initialize(min_event_id, show_progress=False,
+                                 memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
             for candidate_event_id in sampled_edge_ids:
                 prediction = self.calculate_subgraph_prediction(candidate_events=sampled_edge_ids,
                                                                 cf_example_events=node_to_expand.get_parent_ids() +
@@ -101,7 +101,7 @@ class GreedyCFExplainer(Explainer):
                         best_cf_example = child_node
                     if self.verbose:
                         self.logger.info(f'Found counterfactual explanation: ' + str(child_node.to_cf_example()))
-            self.tgnn_bridge.remove_memory_backup(CUR_IT_MIN_EVENT_MEM_LBL)
+            self.tgnn.remove_memory_backup(CUR_IT_MIN_EVENT_MEM_LBL)
             node_to_expand.expanded = True
             if best_cf_example is not None:
                 break
@@ -110,6 +110,6 @@ class GreedyCFExplainer(Explainer):
         best_example = best_cf_example
         if best_example is None:
             best_example = best_non_cf_example
-        self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
-        self.tgnn_bridge.reset_model()
+        self.tgnn.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
+        self.tgnn.reset_model()
         return best_example.to_cf_example()

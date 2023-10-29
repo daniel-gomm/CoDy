@@ -5,7 +5,7 @@ import numpy as np
 import time
 
 from CFTGNNExplainer.embedding import Embedding
-from CFTGNNExplainer.implementations.ttgn import TTGNBridge
+from CFTGNNExplainer.implementations.ttgn import TTGNWrapper
 from CFTGNNExplainer.explainer.base import Explainer
 
 import torch.nn as nn
@@ -62,14 +62,15 @@ class FactualExplanation:
 
 class TPGExplainer(Explainer):
 
-    def __init__(self, tgnn_bridge: TTGNBridge, embedding: Embedding, device: str = 'cpu', hidden_dimension: int = 128):
-        super().__init__(tgnn_bridge)
-        self.tgnn_bridge = tgnn_bridge
+    def __init__(self, tgnn_wrapper: TTGNWrapper, embedding: Embedding, device: str = 'cpu',
+                 hidden_dimension: int = 128):
+        super().__init__(tgnn_wrapper)
+        self.tgnn = tgnn_wrapper
         self.device = device
         self.embedding = embedding
         self.hidden_dimension = hidden_dimension
         self.explainer = self._create_explainer()
-        self.tgnn_bridge.set_evaluation_mode(True)
+        self.tgnn.set_evaluation_mode(True)
 
     def _create_explainer(self) -> nn.Module:
         embedding_dimension = self.embedding.double_dimension
@@ -83,12 +84,12 @@ class TPGExplainer(Explainer):
 
     def explain(self, explained_event_id: int) -> FactualExplanation:
         start_time = time.time_ns()
-        self.tgnn_bridge.reset_model()
+        self.tgnn.reset_model()
         self.explainer.eval()
-        self.tgnn_bridge.initialize(explained_event_id)
+        self.tgnn.initialize(explained_event_id)
         init_end_time = time.time_ns()
         with torch.no_grad():
-            candidate_events = self.tgnn_bridge.get_candidate_events(explained_event_id)
+            candidate_events = self.tgnn.get_candidate_events(explained_event_id)
             if len(candidate_events) == 0:
                 raise RuntimeError(f'No candidates found to explain event {explained_event_id}')
             edge_weights = self.get_event_scores(explained_event_id, candidate_events)
@@ -109,7 +110,7 @@ class TPGExplainer(Explainer):
             'candidates': candidate_events.tolist()
         }
         return FactualExplanation(explained_event_id, candidate_events, edge_weights,
-                                  self.tgnn_bridge.original_score, timings, statistics)
+                                  self.tgnn.original_score, timings, statistics)
 
     def evaluate_fidelity(self, explanation: FactualExplanation):
         candidates = explanation.event_ids
@@ -120,10 +121,10 @@ class TPGExplainer(Explainer):
         for sparsity in sparsity_list:
             sparsity_cutoff = int(sparsity * candidate_num)
             important_events = candidates[:sparsity_cutoff + 1]
-            b_i_events = self.tgnn_bridge.base_events + important_events.tolist()
+            b_i_events = self.tgnn.base_events + important_events.tolist()
             with torch.no_grad():
-                prediction, _ = self.tgnn_bridge.predict(explanation.explained_event_id,
-                                                         edge_id_preserve_list=b_i_events)
+                prediction, _ = self.tgnn.predict(explanation.explained_event_id,
+                                                  edge_id_preserve_list=b_i_events)
             prediction = prediction.detach().cpu().item()
             fid = fidelity(explanation.original_score, prediction)
             fidelity_list.append(fid)
@@ -145,7 +146,7 @@ class TPGExplainer(Explainer):
         torch.save(state_dict, path)
 
     def get_event_scores(self, explained_event_id, candidate_event_ids):
-        self.tgnn_bridge.initialize(explained_event_id)
+        self.tgnn.initialize(explained_event_id)
         edge_embeddings = self.embedding.get_double_embedding(candidate_event_ids, explained_event_id)
         return self.explainer(edge_embeddings)
 
@@ -158,7 +159,7 @@ class TPGExplainer(Explainer):
 
         for epoch in range(epochs):
             if generate_event_ids:
-                train_event_ids = self.tgnn_bridge.model.dataset.extract_random_event_ids('train')
+                train_event_ids = self.tgnn.dataset.extract_random_event_ids('train')
 
             self.logger.info(f'Starting training epoch {epoch}')
             optimizer.zero_grad()
@@ -167,20 +168,20 @@ class TPGExplainer(Explainer):
             counter = 0
             skipped_events = 0
 
-            self.tgnn_bridge.reset_model()
+            self.tgnn.reset_model()
 
             progress_bar = ProgressBar(max_item=len(train_event_ids), prefix=f'Epoch {epoch}: Explaining events')
             for index, event_id in enumerate(sorted(train_event_ids)):
                 progress_bar.next()
-                self.tgnn_bridge.initialize(event_id)
-                candidate_events = self.tgnn_bridge.get_candidate_events(event_id)
+                self.tgnn.initialize(event_id)
+                candidate_events = self.tgnn.get_candidate_events(event_id)
                 if len(candidate_events) == 0:
                     skipped_events += 1
                     continue
                 edge_weights = self.get_event_scores(event_id, candidate_events)
 
-                prob_original_pos, prob_original_neg = self.tgnn_bridge.predict(event_id)
-                prob_masked_pos, prob_masked_neg = self.tgnn_bridge.predict(event_id, candidate_events, edge_weights)
+                prob_original_pos, prob_original_neg = self.tgnn.predict(event_id)
+                prob_masked_pos, prob_masked_neg = self.tgnn.predict(event_id, candidate_events, edge_weights)
 
                 event_loss = self._loss(prob_masked_pos, prob_original_pos)
                 loss += event_loss.flatten()
@@ -196,7 +197,7 @@ class TPGExplainer(Explainer):
                     optimizer.step()
                     progress_bar.update_postfix(f"Cur. loss: {loss.item()}")
                     loss = torch.tensor([0], dtype=torch.float32, device=self.device)
-                    self.tgnn_bridge.post_batch_cleanup()
+                    self.tgnn.post_batch_cleanup()
                     optimizer.zero_grad()
                     counter = 0
 
@@ -206,7 +207,7 @@ class TPGExplainer(Explainer):
                 f'Finished epoch {epoch} with mean loss of {np.mean(loss_list)}, median loss of {np.median(loss_list)},'
                 f' loss variance {np.var(loss_list)} and {skipped_events} skipped events')
 
-            checkpoint_path = f'{save_directory}/{model_name}_checkpt_e{epoch}.pth'
+            checkpoint_path = f'{save_directory}/{model_name}_checkpoint_e{epoch}.pth'
             self._save_explainer(checkpoint_path)
             self.logger.info(f"Saved checkpoint to {checkpoint_path}")
 

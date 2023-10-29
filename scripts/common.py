@@ -121,7 +121,7 @@ def get_event_ids_from_file(event_ids_filepath: str | None, dataset: ContinuousT
 
 
 def sample_wrong_predictions(tgn_wrapper: TGNWrapper | TTGNWrapper):
-    tgn_wrapper.activate_evaluation_mode()
+    tgn_wrapper.set_evaluation_mode(True)
     max_event_id = np.max(tgn_wrapper.dataset.edge_ids)
     batch_data = tgn_wrapper.dataset.get_batch_data(0, max_event_id - 1)
     batch_id = 0

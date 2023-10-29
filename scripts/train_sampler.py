@@ -15,7 +15,6 @@ from CFTGNNExplainer.sampler import create_embedding_model
 from common import (create_dataset_from_args, create_tgn_wrapper_from_args, add_dataset_arguments,
                     add_wrapper_model_arguments, parse_args)
 
-from CFTGNNExplainer.implementations.tgn import TGNBridge
 from CFTGNNExplainer.constants import EXPLAINED_EVENT_MEMORY_LABEL, CUR_IT_MIN_EVENT_MEM_LBL, COL_ID
 from CFTGNNExplainer.data import TrainTestDatasetParameters
 from scripts.evaluation_explainers import EvaluationExplainer
@@ -54,14 +53,14 @@ def extract_training_data(explainer: EvaluationExplainer, emb: Embedding, epoch_
 
         for d in range(depth):
             sample = sampler.sample(event_id, np.unique(np.array(removed_events)), explainer.sample_size)
-            explainer.tgnn_bridge.reset_model()
+            explainer.tgnn.reset_model()
             if len(removed_events) == 0:
                 if 0 < last_min_event_id <= min_event_id:
-                    explainer.tgnn_bridge.initialize(last_min_event_id, show_progress=False,
-                                                     memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
-                explainer.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
-            explainer.tgnn_bridge.initialize(min_event_id, show_progress=False,
-                                             memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
+                    explainer.tgnn.initialize(last_min_event_id, show_progress=False,
+                                              memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
+                explainer.tgnn.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
+            explainer.tgnn.initialize(min_event_id, show_progress=False,
+                                      memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
 
             curr_d_prediction = explainer.calculate_subgraph_prediction(sample, np.unique(removed_events).tolist(),
                                                                         event_id, candidate_event_id=event_id + 1,
@@ -69,8 +68,8 @@ def extract_training_data(explainer: EvaluationExplainer, emb: Embedding, epoch_
 
             sample_embeddings, explained_edge_embedding = emb.get_embeddings(sample, event_id)
 
-            explainer.tgnn_bridge.initialize(min_event_id, show_progress=False,
-                                             memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
+            explainer.tgnn.initialize(min_event_id, show_progress=False,
+                                      memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
 
             sample_true_prediction_deltas = []
             sample_true_predictions = []
@@ -87,7 +86,7 @@ def extract_training_data(explainer: EvaluationExplainer, emb: Embedding, epoch_
                 progress_bar.inner_next()
             progress_bar.inner_close()
 
-            explainer.tgnn_bridge.remove_memory_backup(CUR_IT_MIN_EVENT_MEM_LBL)
+            explainer.tgnn.remove_memory_backup(CUR_IT_MIN_EVENT_MEM_LBL)
 
             saved_results = {'explained_event_id': event_id,
                              'removed_events': removed_events.copy(),
@@ -295,7 +294,7 @@ if __name__ == '__main__':
 
     tgn_wrapper = create_tgn_wrapper_from_args(args, dataset)
 
-    eval_explainer = EvaluationExplainer(TGNBridge(tgn_wrapper), sampling_strategy='random',
+    eval_explainer = EvaluationExplainer(tgn_wrapper, sampling_strategy='random',
                                          candidates_size=args.candidates_size, sample_size=args.sample_size,
                                          verbose=False)
 

@@ -11,7 +11,7 @@ from pandas import DataFrame
 
 from CFTGNNExplainer.embedding import Embedding
 from CFTGNNExplainer.explainer.baseline.pgexplainer import TPGExplainer, greedy_highest_value_over_array
-from CFTGNNExplainer.implementations.ttgn import TTGNBridge
+from CFTGNNExplainer.implementations.ttgn import TTGNWrapper
 from CFTGNNExplainer.constants import COL_TIMESTAMP, COL_NODE_U, COL_NODE_I, COL_ID
 from CFTGNNExplainer.explainer.base import Explainer
 from CFTGNNExplainer.utils import ProgressBar
@@ -96,16 +96,16 @@ class MCTSNode(object):
         return self
 
 
-def compute_scores(tgn_bridge: TTGNBridge, base_events, children, target_event_idx):
+def compute_scores(tgnn: TTGNWrapper, base_events, children, target_event_idx):
     results = []
     oracle_call_time = 0
-    original_prediction = tgn_bridge.original_score
+    original_prediction = tgnn.original_score
     for child in children:
         if child.P == 0:
             before_oracle_call = time.time_ns()
             with torch.no_grad():
-                subgraph_prediction, _ = tgn_bridge.predict(target_event_idx,
-                                                            edge_id_preserve_list=base_events + child.coalition)
+                subgraph_prediction, _ = tgnn.predict(target_event_idx,
+                                                      edge_id_preserve_list=base_events + child.coalition)
             subgraph_prediction = subgraph_prediction.detach().cpu().item()
             oracle_call_time += time.time_ns() - before_oracle_call
             if original_prediction >= 0:
@@ -120,7 +120,7 @@ def compute_scores(tgn_bridge: TTGNBridge, base_events, children, target_event_i
 
 class MCTS(object):
 
-    def __init__(self, events: DataFrame, tgn_bridge: TTGNBridge, candidate_events=None, base_events=None,
+    def __init__(self, events: DataFrame, tgnn: TTGNWrapper, candidate_events=None, base_events=None,
                  candidate_initial_weights=None, node_idx: int = None, event_idx: int = None, n_rollout: int = 10,
                  min_atoms: int = 5, c_puct: float = 10.0):
 
@@ -140,7 +140,7 @@ class MCTS(object):
 
         self.num_nodes = self.events[COL_NODE_U].nunique() + self.events[COL_NODE_I].nunique()
 
-        self.tgn_bridge = tgn_bridge
+        self.tgnn = tgnn
 
         self.n_rollout = n_rollout
         self.min_atoms = min_atoms
@@ -217,7 +217,7 @@ class MCTS(object):
                     continue
 
             # compute scores of all children
-            scores, compute_oracle_call_time = compute_scores(self.tgn_bridge, self.base_events, tree_node.children,
+            scores, compute_oracle_call_time = compute_scores(self.tgnn, self.base_events, tree_node.children,
                                                               self.event_idx)
             self.oracle_call_time += compute_oracle_call_time
             self.oracle_calls += 1
@@ -323,12 +323,12 @@ class TGNNExplainerExplanation:
 
 class TGNNExplainer(Explainer):
 
-    def __init__(self, tgnn_bridge: TTGNBridge, embedding: Embedding, pg_explainer_model: TPGExplainer,
+    def __init__(self, tgnn_wrapper: TTGNWrapper, embedding: Embedding, pg_explainer_model: TPGExplainer,
                  results_dir: str, device: str = 'cpu', rollout: int = 20, min_atoms: int = 1, c_puct: float = 10.0,
                  mcts_saved_dir: Optional[str] = None, save_results: bool = True):
-        super().__init__(tgnn_bridge)
+        super().__init__(tgnn_wrapper)
         self.mcts_state_map = None
-        self.tgnn_bridge = tgnn_bridge
+        self.tgnn = tgnn_wrapper
         self.embedding = embedding
         self.rollout = rollout
         self.min_atoms = min_atoms
@@ -340,7 +340,7 @@ class TGNNExplainer(Explainer):
         self.mcts_saved_dir = mcts_saved_dir
         self.pg_explainer = pg_explainer_model
 
-        self.tgnn_bridge.model.dataset.events['e_idx'] = self.tgnn_bridge.model.dataset.events[COL_ID].copy()
+        self.tgnn.dataset.events['e_idx'] = self.tgnn.dataset.events[COL_ID].copy()
 
     def write_from_mcts_node_list(self, mcts_node_list):
         if isinstance(mcts_node_list[0], MCTSNode):
@@ -350,22 +350,22 @@ class TGNNExplainer(Explainer):
         return ret_list
 
     def _get_candidate_weights(self, event_idx):
-        candidate_events = self.tgnn_bridge.candidate_events
+        candidate_events = self.tgnn.candidate_events
 
-        original_prediction, _ = self.tgnn_bridge.predict(event_idx,
-                                                          edge_id_preserve_list=((candidate_events +
-                                                                                 self.tgnn_bridge.base_events)))
+        original_prediction, _ = self.tgnn.predict(event_idx,
+                                                   edge_id_preserve_list=((candidate_events +
+                                                                           self.tgnn.base_events)))
         original_prediction = original_prediction.detach().cpu().item()
 
         self.pg_explainer.explainer.eval()
         edge_weights = self.pg_explainer.get_event_scores(event_idx, candidate_events)
 
-        _, _ = self.tgnn_bridge.predict(event_idx,
-                                        candidate_event_ids=torch.tensor(candidate_events, dtype=torch.int64,
-                                                                         device=self.device),
-                                        edge_weights=edge_weights)
+        _, _ = self.tgnn.predict(event_idx,
+                                 candidate_event_ids=torch.tensor(candidate_events, dtype=torch.int64,
+                                                                  device=self.device),
+                                 edge_weights=edge_weights)
 
-        e_idx_weight_dict = _agg_attention(self.tgnn_bridge.model.model)
+        e_idx_weight_dict = _agg_attention(self.tgnn.model)
         edge_weights = []
         for e_idx in candidate_events:
             if e_idx in e_idx_weight_dict.keys():
@@ -379,18 +379,18 @@ class TGNNExplainer(Explainer):
 
     def get_scores(self, event_idx: Optional[int] = None,
                    candidate_initial_weights=None):
-        self.tgnn_bridge.initialize(event_idx)
+        self.tgnn.initialize(event_idx)
         subgraph = self.subgraph_generator.get_k_hop_temporal_subgraph(num_hops=self.num_hops, base_event_id=event_idx)
         assert event_idx is not None
         # search
         self.mcts_state_map = MCTS(events=subgraph,
-                                   candidate_events=self.tgnn_bridge.candidate_events,
-                                   base_events=self.tgnn_bridge.base_events,
+                                   candidate_events=self.tgnn.candidate_events,
+                                   base_events=self.tgnn.base_events,
                                    event_idx=event_idx,
                                    n_rollout=self.rollout,
                                    min_atoms=self.min_atoms,
                                    c_puct=self.c_puct,
-                                   tgn_bridge=self.tgnn_bridge,
+                                   tgnn=self.tgnn,
                                    candidate_initial_weights=candidate_initial_weights)
 
         tree_nodes = self.mcts_state_map.mcts(verbose=self.verbose)  # search
@@ -404,10 +404,10 @@ class TGNNExplainer(Explainer):
         timings = {}
         statistics = {}
         start_time = time.time_ns()
-        self.tgnn_bridge.set_evaluation_mode(True)
-        self.tgnn_bridge.reset_model()
+        self.tgnn.set_evaluation_mode(True)
+        self.tgnn.reset_model()
         with torch.no_grad():
-            self.tgnn_bridge.initialize(explained_event_id)
+            self.tgnn.initialize(explained_event_id)
             candidate_initial_weights, original_prediction = self._get_candidate_weights(event_idx=explained_event_id)
             init_end_time = time.time_ns()
 
@@ -417,7 +417,7 @@ class TGNNExplainer(Explainer):
         if self.save_results:  # sometimes store
             self._save_mcts_nodes_info(tree_nodes, explained_event_id)
 
-        candidate_events = self.tgnn_bridge.candidate_events
+        candidate_events = self.tgnn.candidate_events
         results = []
         for i in range(1, len(candidate_events) + 1):
             best_node_at_i = find_best_node_result(tree_nodes, i)
@@ -490,7 +490,7 @@ class TGNNExplainer(Explainer):
         # save records
         recorder_df = DataFrame(self.mcts_state_map.recorder)
         # ROOT_DIR.parent/'benchmarks'/'results'
-        record_filename = self._mcts_recorder_path(self.results_dir, self.tgnn_bridge.model.name, self.dataset.name,
+        record_filename = self._mcts_recorder_path(self.results_dir, self.tgnn.name, self.dataset.name,
                                                    event_idx, suffix='')
         recorder_df.to_csv(record_filename, index=False)
 
@@ -501,7 +501,7 @@ class TGNNExplainer(Explainer):
             saved_contents = {
                 'saved_MCTSInfo_list': self.write_from_mcts_node_list(tree_nodes),
             }
-            path = self._mcts_node_info_path(self.mcts_saved_dir, self.tgnn_bridge.model.name, self.dataset.name,
+            path = self._mcts_node_info_path(self.mcts_saved_dir, self.tgnn.name, self.dataset.name,
                                              event_idx, suffix='')
             torch.save(saved_contents, path)
             print(f'results saved at {path}')

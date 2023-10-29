@@ -5,7 +5,7 @@ from typing import Dict, List
 import numpy as np
 import time
 
-from CFTGNNExplainer.connector import TGNNBridge
+from CFTGNNExplainer.connector import TGNNWrapper
 from CFTGNNExplainer.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample, TreeNode
 from CFTGNNExplainer.explainer.greedy import GreedyCFExplainer, GreedyTreeNode
@@ -58,20 +58,20 @@ class EvaluationExplainer(Explainer):
         @param last_event_id: Event ID of the last event on which this function has been called
         @return: The original prediction for the explained event id
         """
-        self.tgnn_bridge.set_evaluation_mode(True)
-        self.tgnn_bridge.initialize(last_event_id, memory_label=LAST_PREDICTION_MEMORY_LABEL)
-        self.tgnn_bridge.initialize(explained_event_id - 1, memory_label=NEW_PREDICTION_MEMORY_LABEL)
-        original_prediction, _ = self.tgnn_bridge.predict(explained_event_id, result_as_logit=True)
-        self.tgnn_bridge.memory_backups_map[LAST_PREDICTION_MEMORY_LABEL] = (
-            self.tgnn_bridge.memory_backups_map)[NEW_PREDICTION_MEMORY_LABEL]
-        del self.tgnn_bridge.memory_backups_map[NEW_PREDICTION_MEMORY_LABEL]
+        self.tgnn.set_evaluation_mode(True)
+        self.tgnn.initialize(last_event_id, memory_label=LAST_PREDICTION_MEMORY_LABEL)
+        self.tgnn.initialize(explained_event_id - 1, memory_label=NEW_PREDICTION_MEMORY_LABEL)
+        original_prediction, _ = self.tgnn.predict(explained_event_id, result_as_logit=True)
+        self.tgnn.memory_backups_map[LAST_PREDICTION_MEMORY_LABEL] = (
+            self.tgnn.memory_backups_map)[NEW_PREDICTION_MEMORY_LABEL]
+        del self.tgnn.memory_backups_map[NEW_PREDICTION_MEMORY_LABEL]
         return original_prediction.detach().cpu().item()
 
     def initialize_explanation_evaluation(self, explained_event_id: int, original_prediction: float) -> EdgeSampler:
         subgraph = self.subgraph_generator.get_fixed_size_k_hop_temporal_subgraph(num_hops=self.num_hops,
                                                                                   base_event_id=explained_event_id,
                                                                                   size=self.candidates_size)
-        self.tgnn_bridge.set_evaluation_mode(True)
+        self.tgnn.set_evaluation_mode(True)
         return self._create_sampler(subgraph, explained_event_id, original_prediction=original_prediction)
 
     def evaluate_explanation(self, explained_event_id: int, original_prediction: float) -> (
@@ -87,14 +87,14 @@ class EvaluationExplainer(Explainer):
 
 class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
 
-    def __init__(self, tgnn_bridge: TGNNBridge, sampling_strategy: str = 'recent', sample_size: int = 10,
+    def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', sample_size: int = 10,
                  candidates_size: int = 75, verbose: bool = False,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
-        super(GreedyCFExplainer, self).__init__(tgnn_bridge=tgnn_bridge, sampling_strategy=sampling_strategy,
+        super(GreedyCFExplainer, self).__init__(tgnn_wrapper=tgnn_wrapper, sampling_strategy=sampling_strategy,
                                                 sample_size=sample_size, candidates_size=candidates_size,
                                                 verbose=verbose,
                                                 pretrained_sampler_parameters=pretrained_sampler_parameters)
-        super(EvaluationExplainer, self).__init__(tgnn_bridge=tgnn_bridge, sampling_strategy=sampling_strategy,
+        super(EvaluationExplainer, self).__init__(tgnn_wrapper=tgnn_wrapper, sampling_strategy=sampling_strategy,
                                                   candidates_size=candidates_size, sample_size=sample_size,
                                                   verbose=verbose,
                                                   pretrained_sampler_parameters=pretrained_sampler_parameters)
@@ -178,8 +178,8 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
             sampled_edge_ids = sampler.sample(explained_event_id,
                                               excluded_events=np.array(node_to_expand.get_parent_ids()),
                                               size=self.sample_size)
-            self.tgnn_bridge.initialize(min_event_id, show_progress=False,
-                                        memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
+            self.tgnn.initialize(min_event_id, show_progress=False,
+                                 memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
             for candidate_event_id in sampled_edge_ids:
                 child_node, oracle_call_duration, exp_cache_save_time = (
                     self.create_child_node(node_to_expand, memory_label=CUR_IT_MIN_EVENT_MEM_LBL,
@@ -195,7 +195,7 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
                         best_cf_example = child_node
                     if self.verbose:
                         self.logger.info(f'Found counterfactual explanation: ' + str(child_node.to_cf_example()))
-            self.tgnn_bridge.remove_memory_backup(CUR_IT_MIN_EVENT_MEM_LBL)
+            self.tgnn.remove_memory_backup(CUR_IT_MIN_EVENT_MEM_LBL)
             node_to_expand.expanded = True
             if best_cf_example is not None:
                 break
@@ -204,8 +204,8 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
         best_example = best_cf_example
         if best_example is None:
             best_example = best_non_cf_example
-        self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
-        self.tgnn_bridge.reset_model()
+        self.tgnn.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
+        self.tgnn.reset_model()
         end_time = time.time_ns()
         timings['oracle_call_duration'] = oracle_call_time
         timings['explanation_duration'] = end_time - start_time - oracle_call_time + cache_saved_oracle_call_time
@@ -216,7 +216,8 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
         result_cf_example = best_example.to_cf_example()
         cf_example = EvaluationCounterFactualExample(explained_event_id=explained_event_id,
                                                      original_prediction=original_prediction,
-                                                     counterfactual_prediction=result_cf_example.counterfactual_prediction,
+                                                     counterfactual_prediction=
+                                                     result_cf_example.counterfactual_prediction,
                                                      achieves_counterfactual_explanation=
                                                      result_cf_example.achieves_counterfactual_explanation,
                                                      event_ids=result_cf_example.event_ids,
@@ -230,13 +231,13 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
 
 class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
 
-    def __init__(self, tgnn_bridge: TGNNBridge, sampling_strategy: str = 'recent', max_steps: int = 50,
+    def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', max_steps: int = 50,
                  sample_size: int = 10, candidates_size: int = 75, verbose: bool = False,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
-        SearchingCFExplainer.__init__(self, tgnn_bridge=tgnn_bridge, sampling_strategy=sampling_strategy,
+        SearchingCFExplainer.__init__(self, tgnn_wrapper=tgnn_wrapper, sampling_strategy=sampling_strategy,
                                       sample_size=sample_size, candidates_size=candidates_size, verbose=verbose,
                                       max_steps=max_steps, pretrained_sampler_parameters=pretrained_sampler_parameters)
-        EvaluationExplainer.__init__(self, tgnn_bridge=tgnn_bridge, sampling_strategy=sampling_strategy,
+        EvaluationExplainer.__init__(self, tgnn_wrapper=tgnn_wrapper, sampling_strategy=sampling_strategy,
                                      candidates_size=candidates_size, sample_size=sample_size, verbose=verbose,
                                      pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.last_min_id = 0
@@ -258,8 +259,8 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
                              f'{str(edge_ids_to_exclude)}')
         if len(sampled_edge_ids) > 0:
             min_event_id = sampler.subgraph[COL_ID].min() - 1
-            self.tgnn_bridge.initialize(min_event_id, show_progress=False,
-                                        memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
+            self.tgnn.initialize(min_event_id, show_progress=False,
+                                 memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
         for edge_id in sampled_edge_ids:
             oracle_call_start = time.time_ns()
             prediction = self.calculate_subgraph_prediction(candidate_events=sampled_edge_ids,
@@ -273,7 +274,7 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
             node_to_expand.children.append(new_child)
             if new_child.is_counterfactual:
                 counterfactual_examples.append(new_child)
-        self.tgnn_bridge.remove_memory_backup(CUR_IT_MIN_EVENT_MEM_LBL)
+        self.tgnn.remove_memory_backup(CUR_IT_MIN_EVENT_MEM_LBL)
         return counterfactual_examples, oracle_calls, oracle_call_time
 
     def evaluate_explanation(self, explained_event_id: int, original_prediction: float) -> (
@@ -287,9 +288,9 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
         start_time = time.time_ns()
         min_event_id = sampler.subgraph[COL_ID].min() - 1
         if 0 < self.last_min_id <= min_event_id:
-            self.tgnn_bridge.initialize(self.last_min_id, show_progress=False,
-                                        memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
-        self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
+            self.tgnn.initialize(self.last_min_id, show_progress=False,
+                                 memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
+        self.tgnn.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
         oracle_calls = 0
         oracle_call_time = 0
 
@@ -325,7 +326,7 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
             best_cf_example = find_best_non_counterfactual_example(root_node)
         # self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
         self.last_min_id = sampler.subgraph[COL_ID].min() - 1
-        self.tgnn_bridge.reset_model()
+        self.tgnn.reset_model()
         end_time = time.time_ns()
         timings['oracle_call_duration'] = oracle_call_time
         timings['explanation_duration'] = end_time - start_time - oracle_call_time
@@ -350,13 +351,13 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
 
 class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
 
-    def __init__(self, tgnn_bridge: TGNNBridge, sampling_strategy: str = 'recent', max_steps: int = 200,
+    def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', max_steps: int = 200,
                  candidates_size: int = 75, verbose: bool = False,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
-        CFTGNNExplainer.__init__(self, tgnn_bridge=tgnn_bridge, sampling_strategy=sampling_strategy,
+        CFTGNNExplainer.__init__(self, tgnn_wrapper=tgnn_wrapper, sampling_strategy=sampling_strategy,
                                  candidates_size=candidates_size, verbose=verbose, max_steps=max_steps,
                                  pretrained_sampler_parameters=pretrained_sampler_parameters)
-        EvaluationExplainer.__init__(self, tgnn_bridge=tgnn_bridge, sampling_strategy=sampling_strategy,
+        EvaluationExplainer.__init__(self, tgnn_wrapper=tgnn_wrapper, sampling_strategy=sampling_strategy,
                                      candidates_size=candidates_size, sample_size=candidates_size, verbose=verbose,
                                      pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.last_min_id = 0
@@ -480,8 +481,8 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
         if best_cf_example is None:
             best_cf_example = find_best_non_cf_example(root_node)
             best_cf_example_step = step
-        self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
-        self.tgnn_bridge.reset_model()
+        self.tgnn.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
+        self.tgnn.reset_model()
         self.known_states = {}
         end_time = time.time_ns()
         timings['oracle_call_duration'] = oracle_call_time

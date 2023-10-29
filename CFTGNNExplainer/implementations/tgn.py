@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from CFTGNNExplainer.connector import TGNNWrapper, TGNNBridge
+from CFTGNNExplainer.connector import TGNNWrapper
 from CFTGNNExplainer.constants import COL_TIMESTAMP, COL_NODE_I, COL_NODE_U
 from CFTGNNExplainer.data import BatchData, ContinuousTimeDynamicGraphDataset
 from CFTGNNExplainer.utils import ProgressBar, construct_model_path
@@ -31,51 +31,6 @@ def to_data_object(dataset: ContinuousTimeDynamicGraphDataset, edges_to_drop: np
     return Data(dataset.source_node_ids, dataset.target_node_ids, dataset.timestamps, dataset.edge_ids, dataset.labels)
 
 
-class TGNBridge(TGNNBridge):
-
-    def __init__(self, model: TGNNWrapper):
-        super().__init__(model=model)
-        self.model.reset_model()
-        self.model.reset_latest_event_id()  # Reset to a clean state
-
-    def initialize(self, event_id: int, show_progress: bool = False, memory_label: str = None):
-        if memory_label is not None and memory_label in self.memory_backups_map.keys():
-            if show_progress:
-                print(f'Restoring memory with label "{memory_label}"')
-            memory_backup, backup_event_id = self.memory_backups_map[memory_label]
-            if backup_event_id == event_id:
-                self.model.restore_memory(memory_backup, event_id)
-                return
-            else:  # This should not happen. If this happens causes the model to reprocess everything from the beginning
-                self.logger.warning('The provided event ID does not match the event id of the backup. '
-                                    'Recreating the state by processing from the beginning.')
-                self.reset_model()
-
-        progress_bar = None
-        if show_progress:
-            progress_bar = ProgressBar(0, prefix='Rolling out events')
-        self.model.rollout_until_event(event_id, progress_bar=progress_bar)
-        if progress_bar is not None:
-            progress_bar.close()
-        if memory_label is not None:
-            current_memory = self.model.get_memory()
-            self.memory_backups_map[memory_label] = (current_memory, event_id)
-            if show_progress:
-                print(f'Backed up memory with label "{memory_label}"')
-
-    def predict(self, event_id: int, result_as_logit: bool = False):
-        source_node, target_node, timestamp, edge_id = self.model.extract_event_information(event_id)
-        return self.model.compute_edge_probabilities(source_nodes=source_node,
-                                                     target_nodes=target_node,
-                                                     edge_timestamps=timestamp,
-                                                     edge_ids=edge_id,
-                                                     result_as_logit=result_as_logit,
-                                                     perform_memory_update=False)
-
-    def post_batch_cleanup(self):
-        self.model.detach_memory()
-
-
 class TGNWrapper(TGNNWrapper):
     #  Wrapper for 'Temporal Graph Networks' model from https://github.com/twitter-research/tgn
 
@@ -94,6 +49,45 @@ class TGNWrapper(TGNNWrapper):
         self.model.to(torch.device(device))
         self.node_embedding_dimension = self.model.embedding_module.embedding_dimension
         self.time_embedding_dimension = self.model.time_encoder.dimension
+        self.reset_model()
+        self.reset_latest_event_id()  # Reset to a clean state
+
+    def initialize(self, event_id: int, show_progress: bool = False, memory_label: str = None):
+        if memory_label is not None and memory_label in self.memory_backups_map.keys():
+            if show_progress:
+                print(f'Restoring memory with label "{memory_label}"')
+            memory_backup, backup_event_id = self.memory_backups_map[memory_label]
+            if backup_event_id == event_id:
+                self.restore_memory(memory_backup, event_id)
+                return
+            else:  # This should not happen. If this happens causes the model to reprocess everything from the beginning
+                self.logger.warning('The provided event ID does not match the event id of the backup. '
+                                    'Recreating the state by processing from the beginning.')
+                self.reset_model()
+
+        progress_bar = None
+        if show_progress:
+            progress_bar = ProgressBar(0, prefix='Rolling out events')
+        self.rollout_until_event(event_id, progress_bar=progress_bar)
+        if progress_bar is not None:
+            progress_bar.close()
+        if memory_label is not None:
+            current_memory = self.get_memory()
+            self.memory_backups_map[memory_label] = (current_memory, event_id)
+            if show_progress:
+                print(f'Backed up memory with label "{memory_label}"')
+
+    def predict(self, event_id: int, result_as_logit: bool = False):
+        source_node, target_node, timestamp, edge_id = self.extract_event_information(event_id)
+        return self.compute_edge_probabilities(source_nodes=source_node,
+                                               target_nodes=target_node,
+                                               edge_timestamps=timestamp,
+                                               edge_ids=edge_id,
+                                               result_as_logit=result_as_logit,
+                                               perform_memory_update=False)
+
+    def post_batch_cleanup(self):
+        self.model.detach_memory()
 
     def rollout_until_event(self, event_id: int = None, batch_data: BatchData = None,
                             progress_bar: ProgressBar = None) -> None:

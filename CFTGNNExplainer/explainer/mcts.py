@@ -5,7 +5,7 @@ from typing import List
 
 import numpy as np
 
-from CFTGNNExplainer.connector import TGNNBridge
+from CFTGNNExplainer.connector import TGNNWrapper
 from CFTGNNExplainer.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample, calculate_prediction_delta, TreeNode
 from CFTGNNExplainer.sampler import PretrainedEdgeSamplerParameters, EdgeSampler, OneBestEdgeSampler
@@ -125,10 +125,10 @@ class MCTSTreeNode(TreeNode):
 
 class CFTGNNExplainer(Explainer):
 
-    def __init__(self, tgnn_bridge: TGNNBridge, candidates_size: int = 75, sampling_strategy: str = 'recent',
+    def __init__(self, tgnn_wrapper: TGNNWrapper, candidates_size: int = 75, sampling_strategy: str = 'recent',
                  max_steps: int = 200, verbose: bool = False,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
-        super().__init__(tgnn_bridge, sampling_strategy, candidates_size=candidates_size, sample_size=candidates_size,
+        super().__init__(tgnn_wrapper, sampling_strategy, candidates_size=candidates_size, sample_size=candidates_size,
                          verbose=verbose, pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.max_steps = max_steps
         self.known_states = {}
@@ -228,7 +228,7 @@ class CFTGNNExplainer(Explainer):
             step += 1
         if best_cf_example is None:
             best_cf_example = find_best_non_counterfactual_example(root_node)
-        self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
-        self.tgnn_bridge.reset_model()
+        self.tgnn.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
+        self.tgnn.reset_model()
         self.known_states = {}
         return best_cf_example.to_cf_example()
