@@ -6,7 +6,7 @@ from TTGN.utils.utils import get_neighbor_finder
 from common import add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args, parse_args
 
 from CFTGNNExplainer.embedding import StaticEmbedding
-from CFTGNNExplainer.implementations.ttgn import TTGNBridge, TTGNWrapper
+from CFTGNNExplainer.implementations.ttgn import TTGNWrapper
 from CFTGNNExplainer.implementations.tgn import to_data_object
 from CFTGNNExplainer.explainer.baseline.pgexplainer import TPGExplainer
 from TTGN.model.tgn import TGN
@@ -50,12 +50,10 @@ if __name__ == '__main__':
     tgn.to(device)
 
     tgn_wrapper = TTGNWrapper(tgn, dataset, num_hops=2, model_name=dataset.name, device=device, n_neighbors=20,
+                              explanation_candidates_size=args.candidates_size,
                               batch_size=32, checkpoint_path=args.model)
 
-    candidates_size = args.candidates_size
-    bridge = TTGNBridge(tgn_wrapper, explanation_candidates_size=candidates_size)
-
-    explainer = TPGExplainer(bridge, StaticEmbedding(tgn_wrapper.dataset, tgn_wrapper), device=tgn_wrapper.device)
+    explainer = TPGExplainer(tgn_wrapper, StaticEmbedding(tgn_wrapper.dataset, tgn_wrapper), device=tgn_wrapper.device)
 
     explainer.train(epochs=args.epochs, learning_rate=0.0001, batch_size=16, model_name=tgn_wrapper.name,
                     save_directory=args.model_path)

@@ -11,7 +11,6 @@ from CFTGNNExplainer.sampler import create_embedding_model, PretrainedEdgeSample
 from common import (add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args,
                     create_tgn_wrapper_from_args, parse_args, get_event_ids_from_file, SAMPLERS)
 
-from CFTGNNExplainer.implementations.tgn import TGNBridge
 from scripts.evaluation_explainers import EvaluationExplainer, EvaluationCounterFactualExample, \
     EvaluationGreedyCFExplainer, EvaluationSearchingCFExplainer, EvaluationCFTGNNExplainer
 import scripts.evaluation_explainers
@@ -30,13 +29,13 @@ def evaluate(evaluated_explainers: List[EvaluationExplainer], explained_event_id
         progress_bar.update_postfix(f'Generating original score for event {event_id}')
         if optimize:
             original_prediction = evaluated_explainers[0].get_evaluation_original_prediction(event_id, last_event_id)
-            evaluated_explainers[0].tgnn_bridge.reset_model()
+            evaluated_explainers[0].tgnn.reset_model()
         else:
             original_prediction = None
         progress_bar.update_postfix(f'Generating explanation for event {event_id}')
-        for explainer in evaluated_explainers:
-            explanation = explainer.evaluate_explanation(event_id, original_prediction)
-            explainer.explanation_results_list.append(explanation)
+        for selected_explainer in evaluated_explainers:
+            explanation = selected_explainer.evaluate_explanation(event_id, original_prediction)
+            selected_explainer.explanation_results_list.append(explanation)
             # Set the original prediction in the first iteration so that it does not have to be calculated again
             original_prediction = explanation.original_prediction
         scripts.evaluation_explainers.EVALUATION_STATE_CACHE = {}  # Reset the state cache
@@ -120,13 +119,13 @@ if __name__ == '__main__':
         case 'greedy':
             if args.sampler == 'all':
                 for sampler in SAMPLERS:
-                    explainers.append(EvaluationGreedyCFExplainer(TGNBridge(tgn_wrapper), sampling_strategy=sampler,
+                    explainers.append(EvaluationGreedyCFExplainer(tgn_wrapper, sampling_strategy=sampler,
                                                                   candidates_size=args.candidates_size,
                                                                   sample_size=args.sample_size,
                                                                   pretrained_sampler_parameters=sampler_params,
                                                                   verbose=args.debug))
             else:
-                explainers.append(EvaluationGreedyCFExplainer(TGNBridge(tgn_wrapper), sampling_strategy=args.sampler,
+                explainers.append(EvaluationGreedyCFExplainer(tgn_wrapper, sampling_strategy=args.sampler,
                                                               candidates_size=args.candidates_size,
                                                               sample_size=args.sample_size,
                                                               pretrained_sampler_parameters=sampler_params,
@@ -135,24 +134,24 @@ if __name__ == '__main__':
             if args.sampler == 'all':
                 for sampler in SAMPLERS:
                     explainers.append(
-                        EvaluationSearchingCFExplainer(TGNBridge(tgn_wrapper), sampling_strategy=sampler,
+                        EvaluationSearchingCFExplainer(tgn_wrapper, sampling_strategy=sampler,
                                                        candidates_size=args.candidates_size,
                                                        sample_size=args.sample_size, verbose=args.debug,
                                                        pretrained_sampler_parameters=sampler_params))
             else:
-                explainers.append(EvaluationSearchingCFExplainer(TGNBridge(tgn_wrapper), sampling_strategy=args.sampler,
+                explainers.append(EvaluationSearchingCFExplainer(tgn_wrapper, sampling_strategy=args.sampler,
                                                                  candidates_size=args.candidates_size,
                                                                  sample_size=args.sample_size, verbose=args.debug,
                                                                  pretrained_sampler_parameters=sampler_params))
         case 'cftgnnexplainer':
             if args.sampler == 'all':
                 for sampler in SAMPLERS:
-                    explainers.append(EvaluationCFTGNNExplainer(TGNBridge(tgn_wrapper), sampling_strategy=sampler,
+                    explainers.append(EvaluationCFTGNNExplainer(tgn_wrapper, sampling_strategy=sampler,
                                                                 candidates_size=args.candidates_size,
                                                                 max_steps=250, verbose=args.debug,
                                                                 pretrained_sampler_parameters=sampler_params))
             else:
-                explainers.append(EvaluationCFTGNNExplainer(TGNBridge(tgn_wrapper), sampling_strategy=args.sampler,
+                explainers.append(EvaluationCFTGNNExplainer(tgn_wrapper, sampling_strategy=args.sampler,
                                                             candidates_size=args.candidates_size,
                                                             max_steps=250, verbose=args.debug,
                                                             pretrained_sampler_parameters=sampler_params))

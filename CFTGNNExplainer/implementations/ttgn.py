@@ -6,7 +6,7 @@ import torch
 from CFTGNNExplainer.utils import ProgressBar
 from TTGN.model.tgn import TGN
 
-from CFTGNNExplainer.connector import TGNNWrapper, TGNNBridge
+from CFTGNNExplainer.connector import TGNNWrapper
 from CFTGNNExplainer.data import ContinuousTimeDynamicGraphDataset, BatchData
 from TTGN.utils.data_processing import compute_time_statistics
 from TTGN.utils.utils import NeighborFinder
@@ -47,7 +47,7 @@ def find_candidate_events(dataset: ContinuousTimeDynamicGraphDataset, neighborho
 
         out_ngh_node_batch = out_ngh_node_batch.tolist()
         out_ngh_t_batch = out_ngh_t_batch.tolist()
-        out_ngh_eidx_batch = (out_ngh_eidx_batch).tolist()
+        out_ngh_eidx_batch = out_ngh_eidx_batch.tolist()
 
         accu_node.append(out_ngh_node_batch)
         accu_ts.append(out_ngh_t_batch)
@@ -69,7 +69,8 @@ def find_candidate_events(dataset: ContinuousTimeDynamicGraphDataset, neighborho
 class TTGNWrapper(TGNNWrapper):
 
     def __init__(self, model: TGN, dataset: ContinuousTimeDynamicGraphDataset, num_hops: int, model_name: str,
-                 device: str = 'cpu', n_neighbors: int = 20, batch_size: int = 128, checkpoint_path: str = None):
+                 explanation_candidates_size: int, device: str = 'cpu', n_neighbors: int = 20, batch_size: int = 128,
+                 checkpoint_path: str = None):
         super().__init__(model, dataset, num_hops, model_name)
 
         model.mean_time_shift_src, model.std_time_shift_src, model.mean_time_shift_dst, model.std_time_shift_dst = \
@@ -84,6 +85,15 @@ class TTGNWrapper(TGNNWrapper):
             self.model.to(self.device)
         self.node_embedding_dimension = self.model.embedding_module.embedding_dimension
         self.time_embedding_dimension = self.model.time_encoder.dimension
+
+        self.last_predicted_event_id = None
+        self.model = model
+        self.memory_backups_map = {}
+        self.reset_model()
+        self.reset_latest_event_id()
+        self.explanation_candidates_size = explanation_candidates_size
+
+        self.original_score = None
 
     def compute_embeddings(self, source_nodes, target_nodes, edge_times, edge_ids,
                            negative_nodes=None,
@@ -125,7 +135,39 @@ class TTGNWrapper(TGNNWrapper):
 
         self.latest_event_id = event_id
 
-    def initialize(self, event_id, num_neighbors: int):
+    def initialize(self, event_id: int, show_progress: bool = False, memory_label: str = None):
+        if show_progress:
+            print(f'Initializing model for event {event_id}')
+
+        (self.candidate_events,
+         self.unique_edge_ids,
+         self.base_events,
+         original_score) = self._initialize_model(event_id, self.explanation_candidates_size)
+        self.original_score = original_score.detach().cpu().item()
+        self.last_predicted_event_id = event_id
+
+    def initialize_static(self, event_id: int):
+        self.reset_model()
+        return self._initialize_model(event_id, self.explanation_candidates_size)
+
+    def predict(self, event_id: int, candidate_event_ids=None, edge_weights=None, edge_id_preserve_list=None):
+        source_node, target_node, timestamp, edge_id = self.extract_event_information(event_id)
+        return self.compute_edge_probabilities(source_nodes=source_node,
+                                               target_nodes=target_node,
+                                               edge_timestamps=timestamp,
+                                               edge_ids=edge_id,
+                                               perform_memory_update=False,
+                                               candidate_event_ids=candidate_event_ids,
+                                               candidate_event_weights=edge_weights,
+                                               result_as_logit=True,
+                                               edge_idx_preserve_list=edge_id_preserve_list)
+
+    def get_candidate_events(self, event_id: int):
+        assert event_id == self.last_predicted_event_id, (f'Last event predicted {self.last_predicted_event_id} does '
+                                                          f'not match with the provided event id {event_id}')
+        return self.candidate_events
+
+    def _initialize_model(self, event_id, num_neighbors: int):
         candidate_events, unique_edge_ids = find_candidate_events(self.dataset, self.model.neighbor_finder, event_id,
                                                                   self.num_hops, num_neighbors)
         base_events = list(filter(lambda x: x not in set(candidate_events), unique_edge_ids))
@@ -186,8 +228,8 @@ class TTGNWrapper(TGNNWrapper):
                 memory = self.model.memory.get_memory(list(range(self.model.n_nodes)))
         timestamps = np.repeat(current_timestamp, len(node_ids))
 
-        return self.model.embedding_module.compute_embedding(memory=memory, source_nodes=node_ids, timestamps=timestamps
-                                                             , n_layers=self.model.num_layers,
+        return self.model.embedding_module.compute_embedding(memory=memory, source_nodes=node_ids,
+                                                             timestamps=timestamps, n_layers=self.model.num_layers,
                                                              n_neighbors=self.n_neighbors,
                                                              candidate_weights_dict=candidate_weights_dict)
 
@@ -206,53 +248,3 @@ class TTGNWrapper(TGNNWrapper):
         self.reset_latest_event_id()
         self.detach_memory()
         self.model.memory.__init_memory__()
-
-
-class TTGNBridge(TGNNBridge):
-
-    def __init__(self, model: TTGNWrapper, explanation_candidates_size: int):
-        super().__init__(model)
-        self.last_predicted_event_id = None
-        self.model = model
-        self.memory_backups_map = {}
-        self.model.reset_model()
-        self.model.reset_latest_event_id()
-        self.explanation_candidates_size = explanation_candidates_size
-
-    def initialize(self, event_id: int, show_progress: bool = False, memory_label: str = None):
-        if show_progress:
-            print(f'Initializing model for event {event_id}')
-
-        (self.candidate_events,
-         self.unique_edge_ids,
-         self.base_events,
-         original_score) = self.model.initialize(event_id, self.explanation_candidates_size)
-        self.original_score = original_score.detach().cpu().item()
-        self.last_predicted_event_id = event_id
-
-    def initialize_static(self, event_id: int):
-        self.model.reset_model()
-        return self.model.initialize(event_id, self.explanation_candidates_size)
-
-    def predict(self, event_id: int, candidate_event_ids=None, edge_weights=None, edge_id_preserve_list=None):
-        source_node, target_node, timestamp, edge_id = self.model.extract_event_information(event_id)
-        return self.model.compute_edge_probabilities(source_nodes=source_node,
-                                                     target_nodes=target_node,
-                                                     edge_timestamps=timestamp,
-                                                     edge_ids=edge_id,
-                                                     perform_memory_update=False,
-                                                     candidate_event_ids=candidate_event_ids,
-                                                     candidate_event_weights=edge_weights,
-                                                     result_as_logit=True,
-                                                     edge_idx_preserve_list=edge_id_preserve_list)
-
-    def get_candidate_events(self, event_id: int):
-        assert event_id == self.last_predicted_event_id, (f'Last event predicted {self.last_predicted_event_id} does '
-                                                          f'not match with the provided event id {event_id}')
-        return self.candidate_events
-
-    def reset_model(self):
-        self.model.reset_model()
-
-    def remove_memory_backup(self, label: str):
-        pass

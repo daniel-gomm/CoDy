@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 
-from CFTGNNExplainer.connector import TGNNBridge
+from CFTGNNExplainer.connector import TGNNWrapper
 from CFTGNNExplainer.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from CFTGNNExplainer.data import SubgraphGenerator
 from CFTGNNExplainer.sampler import EdgeSampler, RandomEdgeSampler, RecentEdgeSampler, ClosestEdgeSampler, \
@@ -158,13 +158,13 @@ def calculate_prediction_delta(original_prediction: float, prediction_to_assess:
 
 class Explainer:
 
-    def __init__(self, tgnn_bridge: TGNNBridge, sampling_strategy: str = 'recent', candidates_size: int = 75,
+    def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', candidates_size: int = 75,
                  sample_size: int = 10, verbose: bool = False,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
-        self.tgnn_bridge = tgnn_bridge
-        self.dataset = self.tgnn_bridge.model.dataset
+        self.tgnn = tgnn_wrapper
+        self.dataset = self.tgnn.dataset
         self.subgraph_generator = SubgraphGenerator(self.dataset)
-        self.num_hops = self.tgnn_bridge.model.num_hops
+        self.num_hops = self.tgnn.num_hops
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger()
         self.sampling_strategy = sampling_strategy
@@ -201,9 +201,9 @@ class Explainer:
         @param min_event_id: Lowest event id in the candidate events
         @return: The prediction for the full graph without exclusions
         """
-        self.tgnn_bridge.initialize(min_event_id, show_progress=self.verbose, memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
-        self.tgnn_bridge.initialize(explained_event_id - 1)
-        original_prediction, _ = self.tgnn_bridge.predict(explained_event_id, result_as_logit=True)
+        self.tgnn.initialize(min_event_id, show_progress=self.verbose, memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
+        self.tgnn.initialize(explained_event_id - 1)
+        original_prediction, _ = self.tgnn.predict(explained_event_id, result_as_logit=True)
         original_prediction = original_prediction.detach().cpu().item()
         if self.verbose:
             self.logger.info(f'Original prediction {original_prediction}')
@@ -221,8 +221,8 @@ class Explainer:
                                                                                   size=self.candidates_size)
         min_event_id = subgraph[COL_ID].min() - 1  # One less since we do not want to simulate the minimal event
 
-        self.tgnn_bridge.set_evaluation_mode(True)
-        self.tgnn_bridge.reset_model()
+        self.tgnn.set_evaluation_mode(True)
+        self.tgnn.reset_model()
         original_prediction = self.calculate_original_score(explained_event_id, min_event_id)
         return original_prediction, self._create_sampler(subgraph, explained_event_id, original_prediction)
 
@@ -238,14 +238,14 @@ class Explainer:
         @param memory_label: Provide name of memory label if it should be different from the default
         @return: Prediction when excluding the candidate events
         """
-        self.tgnn_bridge.initialize(np.min(candidate_events) - 1, show_progress=False,
-                                    memory_label=memory_label)
-        subgraph_prediction, _ = self.tgnn_bridge.predict_from_subgraph(explained_event_id,
-                                                                        np.array(cf_example_events +
-                                                                                 [candidate_event_id]),
-                                                                        result_as_logit=True)
-        subgraph_prediction = subgraph_prediction.detach().cpu().item()
-        return subgraph_prediction
+        self.tgnn.initialize(np.min(candidate_events) - 1, show_progress=False,
+                             memory_label=memory_label)
+        subgraph_pred, _ = self.tgnn.compute_edge_probabilities_for_subgraph(explained_event_id,
+                                                                             np.array(cf_example_events +
+                                                                                      [candidate_event_id]),
+                                                                             result_as_logit=True)
+        subgraph_pred = subgraph_pred.detach().cpu().item()
+        return subgraph_pred
 
     def explain(self, explained_event_id: int) -> CounterFactualExample:
         """

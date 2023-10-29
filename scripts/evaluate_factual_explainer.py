@@ -16,7 +16,7 @@ from TTGN.utils.utils import get_neighbor_finder
 from common import add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args, parse_args, \
     get_event_ids_from_file
 
-from CFTGNNExplainer.implementations.ttgn import TTGNBridge, TTGNWrapper
+from CFTGNNExplainer.implementations.ttgn import TTGNWrapper
 from CFTGNNExplainer.explainer.baseline.pgexplainer import TPGExplainer, FactualExplanation
 from CFTGNNExplainer.explainer.baseline.tgnnexplainer import TGNNExplainer, TGNNExplainerExplanation
 
@@ -105,6 +105,7 @@ if __name__ == '__main__':
     tgn.to(device)
 
     tgn_wrapper = TTGNWrapper(tgn, dataset, num_hops=2, model_name=dataset.name, device=device, n_neighbors=20,
+                              explanation_candidates_size=args.candidates_size,
                               batch_size=32, checkpoint_path=args.model)
 
     event_ids_to_explain = get_event_ids_from_file(args.explained_ids, dataset, logger, args.wrong_predictions_only,
@@ -112,15 +113,13 @@ if __name__ == '__main__':
 
     embedding = StaticEmbedding(dataset, tgn_wrapper)
 
-    tgn_bridge = TTGNBridge(tgn_wrapper, explanation_candidates_size=args.candidates_size)
-
-    pg_explainer = TPGExplainer(tgn_bridge, embedding=embedding, device=tgn_wrapper.device)
+    pg_explainer = TPGExplainer(tgn_wrapper, embedding=embedding, device=tgn_wrapper.device)
 
     match args.explainer:
         case 'pg_explainer':
             explainer = pg_explainer
         case 't_gnnexplainer':
-            explainer = TGNNExplainer(tgn_bridge, embedding, pg_explainer, results_dir=args.mcts_save_dir,
+            explainer = TGNNExplainer(tgn_wrapper, embedding, pg_explainer, results_dir=args.mcts_save_dir,
                                       device=tgn_wrapper.device, rollout=args.rollout, mcts_saved_dir=None,
                                       save_results=True)
         case _:

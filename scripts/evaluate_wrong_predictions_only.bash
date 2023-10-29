@@ -38,7 +38,7 @@ evaluate_explainer() {
   cftgnnexplainer)
     echo "Selected sampler $3"
     SAMPLER_MODEL_PATH="$PARENT_DIR/resources/models/$1/sampler/$1_dynamic_sampler.pth"
-    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer cftgnnexplainer --number_of_explained_events 10 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 50 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only
+    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer cftgnnexplainer --number_of_explained_events 10 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 50 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only --debug
     ;;
   *)
     show_help

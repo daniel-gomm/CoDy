@@ -5,7 +5,7 @@ from typing import List
 
 import numpy as np
 
-from CFTGNNExplainer.connector import TGNNBridge
+from CFTGNNExplainer.connector import TGNNWrapper
 from CFTGNNExplainer.explainer.base import Explainer, calculate_prediction_delta, TreeNode
 from CFTGNNExplainer.sampler import EdgeSampler, PretrainedEdgeSamplerParameters
 from CFTGNNExplainer.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
@@ -131,10 +131,10 @@ class BatchSearchTreeNode(TreeNode):
 
 class SearchingCFExplainer(Explainer):
 
-    def __init__(self, tgnn_bridge: TGNNBridge, candidates_size: int = 75, sample_size: int = 10,
+    def __init__(self, tgnn_wrapper: TGNNWrapper, candidates_size: int = 75, sample_size: int = 10,
                  sampling_strategy: str = 'recent', max_steps: int = 50, verbose: bool = False,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
-        super().__init__(tgnn_bridge, sampling_strategy, candidates_size=candidates_size, sample_size=sample_size,
+        super().__init__(tgnn_wrapper, sampling_strategy, candidates_size=candidates_size, sample_size=sample_size,
                          verbose=verbose, pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.max_steps = max_steps
 
@@ -153,8 +153,8 @@ class SearchingCFExplainer(Explainer):
                              f'{str(edge_ids_to_exclude)}')
         if len(sampled_edge_ids) > 0:
             min_event_id = sampler.subgraph[COL_ID].min() - 1
-            self.tgnn_bridge.initialize(min_event_id, show_progress=False,
-                                        memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
+            self.tgnn.initialize(min_event_id, show_progress=False,
+                                 memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
         for edge_id in sampled_edge_ids:
             prediction = self.calculate_subgraph_prediction(candidate_events=sampled_edge_ids,
                                                             cf_example_events=edge_ids_to_exclude,
@@ -165,7 +165,7 @@ class SearchingCFExplainer(Explainer):
             node_to_expand.children.append(new_child)
             if new_child.is_counterfactual:
                 counterfactual_examples.append(new_child)
-        self.tgnn_bridge.remove_memory_backup(CUR_IT_MIN_EVENT_MEM_LBL)
+        self.tgnn.remove_memory_backup(CUR_IT_MIN_EVENT_MEM_LBL)
         return counterfactual_examples
 
     def explain(self, explained_event_id: int):
@@ -195,6 +195,6 @@ class SearchingCFExplainer(Explainer):
                                      + str(best_cf_example.to_cf_example()))
         if best_cf_example is None:
             best_cf_example = find_best_non_counterfactual_example(root_node)
-        self.tgnn_bridge.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
-        self.tgnn_bridge.reset_model()
+        self.tgnn.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
+        self.tgnn.reset_model()
         return best_cf_example.to_cf_example()
