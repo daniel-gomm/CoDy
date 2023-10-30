@@ -298,7 +298,7 @@ class MCTS(object):
 
         max_event_idx = max(self.root.coalition)
         curr_t = self.events[COL_TIMESTAMP][max_event_idx]
-        ts = self.events[COL_TIMESTAMP][self.events['e_idx'].isin(node.coalition)].values
+        ts = self.events[COL_TIMESTAMP][self.events[COL_ID].isin(node.coalition)].values
         delta_ts = curr_t - ts
         t_score_exp = np.exp(beta * delta_ts)
         t_score_exp = np.sum(t_score_exp)
@@ -392,8 +392,6 @@ class TGNNExplainer(Explainer):
         self.mcts_saved_dir = mcts_saved_dir
         self.pg_explainer = pg_explainer_model
 
-        self.tgnn.dataset.events['e_idx'] = self.tgnn.dataset.events[COL_ID].copy()
-
     def write_from_mcts_node_list(self, mcts_node_list):
         if isinstance(mcts_node_list[0], MCTSNode):
             ret_list = [node.info for node in mcts_node_list]
@@ -430,9 +428,9 @@ class TGNNExplainer(Explainer):
         return candidate_initial_weights, original_prediction
 
     def get_scores(self, event_idx: Optional[int] = None,
-                   candidate_initial_weights=None):
-        self.tgnn.initialize(event_idx)
-        subgraph = k_hop_temporal_subgraph(self.tgnn.dataset.events, self.num_hops, event_idx)
+                   candidate_initial_weights=None, subgraph=None):
+        #subgraph = k_hop_temporal_subgraph(self.tgnn.dataset.events, self.num_hops, event_idx)
+        self.tgnn.initialize(event_idx, subgraph_event_ids=subgraph[COL_ID].to_numpy())
         assert event_idx is not None
         # search
         self.mcts_state_map = MCTS(events=subgraph,
@@ -458,13 +456,15 @@ class TGNNExplainer(Explainer):
         start_time = time.time_ns()
         self.tgnn.set_evaluation_mode(True)
         self.tgnn.reset_model()
+        subgraph = k_hop_temporal_subgraph(self.tgnn.dataset.events, self.num_hops, explained_event_id)
         with torch.no_grad():
-            self.tgnn.initialize(explained_event_id)
+            self.tgnn.initialize(explained_event_id, subgraph_event_ids=subgraph[COL_ID].to_numpy())
             candidate_initial_weights, original_prediction = self._get_candidate_weights(event_idx=explained_event_id)
             init_end_time = time.time_ns()
 
         tree_nodes, tree_node_x = self.get_scores(event_idx=explained_event_id,
-                                                  candidate_initial_weights=candidate_initial_weights)
+                                                  candidate_initial_weights=candidate_initial_weights,
+                                                  subgraph=subgraph)
         self._save_mcts_recorder(explained_event_id)  # always store
         if self.save_results:  # sometimes store
             self._save_mcts_nodes_info(tree_nodes, explained_event_id)
