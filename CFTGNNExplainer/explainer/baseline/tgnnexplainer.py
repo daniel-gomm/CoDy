@@ -51,6 +51,58 @@ def find_best_node_result(all_nodes, min_atoms=6):
     return best_node
 
 
+def k_hop_temporal_subgraph(df, num_hops, event_idx):
+    """
+    df: temporal graph, events stream. DataFrame. An user-item bipartite graph.
+    node: center user node
+    num_hops: number of hops of the subgraph
+    event_idx: should start from 1. 1, 2, 3, ...
+    return: a sub DataFrame
+
+    """
+    df_new = df.copy()
+    df_new = df_new[df_new[COL_ID] <= event_idx]  # ignore events latter than event_idx
+
+    center_node = df_new[df_new[COL_ID] == event_idx][COL_NODE_U].values[0]  # event_idx represents e_idx
+
+    subsets = [[center_node], ]
+    num_nodes = df_new[COL_NODE_I].max() + 1
+
+    node_mask = np.zeros((num_nodes,), dtype=bool)
+    source_nodes = np.array(df_new[COL_NODE_U], dtype=int)  # user nodes, 0--k-1
+    target_nodes = np.array(df_new[COL_NODE_I],
+                            dtype=int)  # item nodes, k--N-1, N is the number of total users and items
+
+    for _ in range(num_hops):
+        node_mask.fill(False)
+        node_mask[np.array(subsets[-1])] = True
+        edge_mask = node_mask[source_nodes]
+        new_nodes = target_nodes[edge_mask]  # new neighbors
+        subsets.append(np.unique(new_nodes).tolist())
+
+        source_nodes, target_nodes = target_nodes, source_nodes  # regarded as undirected graph
+
+    subset = np.unique(np.concatenate([np.array(nodes) for nodes in subsets]))  # selected temporal subgraph nodes
+
+    assert center_node in subset
+
+    source_nodes = np.array(df_new[COL_NODE_U], dtype=int)
+    target_nodes = np.array(df_new[COL_NODE_I], dtype=int)
+
+    node_mask.fill(False)
+    node_mask[subset] = True
+
+    user_mask = node_mask[source_nodes]  # user mask for events
+    item_mask = node_mask[target_nodes]  # item mask for events
+
+    edge_mask = user_mask & item_mask  # event mask
+
+    subgraph_df = df_new.iloc[edge_mask, :].copy()
+    assert center_node in subgraph_df[COL_NODE_U].values
+
+    return subgraph_df
+
+
 class MCTSNode(object):
     def __init__(self, coalition: list = None, created_by_remove: int = None,
                  c_puct: float = 10.0, w: float = 0, n: int = 0, p: float = 0, sparsity: float = 1,
@@ -292,7 +344,7 @@ class MCTS(object):
         self.state_map = {self.root_key: self.root}
 
         max_event_idx = max(self.root.coalition)
-        self.curr_t = self.events[COL_TIMESTAMP][self.events.e_idx == max_event_idx].values[0]
+        self.curr_t = self.events[COL_TIMESTAMP][max_event_idx]
 
     @staticmethod
     def _node_key(coalition):
@@ -380,7 +432,7 @@ class TGNNExplainer(Explainer):
     def get_scores(self, event_idx: Optional[int] = None,
                    candidate_initial_weights=None):
         self.tgnn.initialize(event_idx)
-        subgraph = self.subgraph_generator.get_k_hop_temporal_subgraph(num_hops=self.num_hops, base_event_id=event_idx)
+        subgraph = k_hop_temporal_subgraph(self.tgnn.dataset.events, self.num_hops, event_idx)
         assert event_idx is not None
         # search
         self.mcts_state_map = MCTS(events=subgraph,
