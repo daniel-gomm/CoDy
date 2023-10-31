@@ -42,12 +42,15 @@ def evaluate(evaluated_explainers: List[EvaluationExplainer], explained_event_id
         last_event_id = event_id - 1
         progress_bar.next()
 
-    # return explanation_list
-
 
 def export_explanations(explanation_list: List[EvaluationCounterFactualExample], filepath: str):
     explanations_dicts = [explanation.to_dict() for explanation in explanation_list]
     explanations_df = pd.DataFrame(explanations_dicts)
+    try:
+        explanations_df.to_parquet(filepath.rstrip('csv') + 'parquet')
+    except ImportError:
+        logger.info('Failed to export to parquet format. Install pyarrow to export to parquet format '
+                    '(pip install pyarrow)')
     explanations_df.to_csv(filepath)
     logger.info(f'Saved evaluation results to {filepath}')
 
