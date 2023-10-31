@@ -48,7 +48,14 @@ class EvaluationCounterFactualExample(CounterFactualExample):
 
 
 class EvaluationExplainer(Explainer):
-    explanation_results_list: List[EvaluationCounterFactualExample] = []
+    explanation_results_list: List[EvaluationCounterFactualExample]
+
+    def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', candidates_size: int = 75,
+                 sample_size: int = 10, verbose: bool = False,
+                 pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
+        super().__init__(tgnn_wrapper, sampling_strategy, candidates_size, sample_size, verbose,
+                         pretrained_sampler_parameters)
+        self.explanation_results_list = []
 
     def get_evaluation_original_prediction(self, explained_event_id: int, last_event_id: int) -> float:
         """
