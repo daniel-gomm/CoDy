@@ -47,6 +47,11 @@ def evaluate(evaluated_explainer: TGNNExplainer | TPGExplainer, explained_event_
 def export_explanations(explanation_list: List[FactualExplanation | TGNNExplainerExplanation], filepath: str):
     explanations_dicts = [explanation.to_dict() for explanation in explanation_list]
     explanations_df = pd.DataFrame(explanations_dicts)
+    try:
+        explanations_df.to_parquet(filepath.rstrip('csv') + 'parquet')
+    except ImportError:
+        logger.info('Failed to export to parquet format. Install pyarrow to export to parquet format '
+                    '(pip install pyarrow)')
     explanations_df.to_csv(filepath)
     logger.info(f'Saved evaluation results to {filepath}')
 
