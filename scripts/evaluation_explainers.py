@@ -153,11 +153,14 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
 
         if type(sampler) is OneBestEdgeSampler:
             for child_id in sampler.rank_subgraph(base_event_id=explained_event_id, excluded_events=np.array([])):
-                child_node, _, _ = self.create_child_node(node_to_expand=root_node,
-                                                          memory_label=EXPLAINED_EVENT_MEMORY_LABEL,
-                                                          explained_event_id=explained_event_id,
-                                                          candidate_event_id=child_id,
-                                                          sampled_edge_ids=sampler.subgraph[COL_ID])
+                child_node, oc_duration, saved_time = self.create_child_node(node_to_expand=root_node,
+                                                                             memory_label=EXPLAINED_EVENT_MEMORY_LABEL,
+                                                                             explained_event_id=explained_event_id,
+                                                                             candidate_event_id=child_id,
+                                                                             sampled_edge_ids=sampler.subgraph[COL_ID])
+                oracle_call_time += oc_duration
+                cache_saved_oracle_call_time += saved_time
+                oracle_calls += 1
                 if child_node.is_counterfactual:
                     if best_cf_example is None:
                         best_cf_example = child_node
@@ -194,6 +197,7 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
                                            candidate_event_id=candidate_event_id,
                                            sampled_edge_ids=sampled_edge_ids))
                 oracle_call_time += oracle_call_duration
+                oracle_calls += 1
                 cache_saved_oracle_call_time += exp_cache_save_time
                 if child_node.is_counterfactual:
                     if best_cf_example is None:
