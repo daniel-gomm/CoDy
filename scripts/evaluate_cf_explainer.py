@@ -103,7 +103,7 @@ if __name__ == '__main__':
 
     tgn_wrapper = create_tgn_wrapper_from_args(args, dataset)
 
-    event_ids_to_explain = get_event_ids_from_file(args.explained_ids, dataset, logger, args.wrong_predictions_only,
+    event_ids_to_explain = get_event_ids_from_file(args.explained_ids, logger, args.wrong_predictions_only,
                                                    tgn_wrapper)
 
     sampler_params = None

@@ -113,7 +113,7 @@ if __name__ == '__main__':
                               explanation_candidates_size=args.candidates_size,
                               batch_size=32, checkpoint_path=args.model)
 
-    event_ids_to_explain = get_event_ids_from_file(args.explained_ids, dataset, logger, args.wrong_predictions_only,
+    event_ids_to_explain = get_event_ids_from_file(args.explained_ids, logger, args.wrong_predictions_only,
                                                    tgn_wrapper)
 
     embedding = StaticEmbedding(dataset, tgn_wrapper)
