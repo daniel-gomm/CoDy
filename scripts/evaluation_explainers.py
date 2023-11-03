@@ -223,7 +223,7 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
         timings['total_duration'] = end_time - start_time + cache_saved_oracle_call_time
         statistics['oracle_calls'] = oracle_calls
         statistics['candidate_size'] = len(sampler.subgraph)
-        statistics['candidates'] = sampler.subgraph[COL_ID].to_list()
+        statistics['candidates'] = sampler.subgraph[COL_ID].to_numpy()
         result_cf_example = best_example.to_cf_example()
         cf_example = EvaluationCounterFactualExample(explained_event_id=explained_event_id,
                                                      original_prediction=original_prediction,
@@ -344,7 +344,7 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
         timings['total_duration'] = end_time - start_time
         statistics['oracle_calls'] = oracle_calls
         statistics['candidate_size'] = len(sampler.subgraph)
-        statistics['candidates'] = sampler.subgraph[COL_ID].to_list()
+        statistics['candidates'] = sampler.subgraph[COL_ID].to_numpy()
         cf_ex = best_cf_example.to_cf_example()
         eval_cf_example = EvaluationCounterFactualExample(explained_event_id=explained_event_id,
                                                           original_prediction=original_prediction,
@@ -467,7 +467,8 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
             exp_oracle_call_time, exp_cache_save_time = self._run_node_expansion(explained_event_id, node_to_expand,
                                                                                  sampler)
             if self.verbose:
-                self.logger.info(f'Selected node {node_to_expand.edge_id} at depth {node_to_expand.depth}, '
+                self.logger.info(f'[{step}/{self.max_steps}] Selected node {node_to_expand.edge_id} '
+                                 f'at depth {node_to_expand.depth}, '
                                  f'prediction: {node_to_expand.prediction}, '
                                  f'exploitation score: {node_to_expand.exploitation_score}, hash: '
                                  f'{node_to_expand.hash()}')
@@ -501,7 +502,7 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
         timings['total_duration'] = end_time - start_time + cache_saved_oracle_call_time
         statistics['oracle_calls'] = oracle_calls
         statistics['candidate_size'] = len(sampler.subgraph)
-        statistics['candidates'] = sampler.subgraph[COL_ID].to_list()
+        statistics['candidates'] = sampler.subgraph[COL_ID].to_numpy()
         statistics['cf_example_step'] = best_cf_example_step
         statistics['encountered_cf_examples'] = encountered_cf_examples
         cf_ex = best_cf_example.to_cf_example()
