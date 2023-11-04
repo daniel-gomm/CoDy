@@ -126,20 +126,22 @@ class MCTSTreeNode(TreeNode):
 class CFTGNNExplainer(Explainer):
 
     def __init__(self, tgnn_wrapper: TGNNWrapper, candidates_size: int = 75, sampling_strategy: str = 'recent',
-                 max_steps: int = 200, verbose: bool = False,
+                 max_steps: int = 200, verbose: bool = False, approximate_predictions: bool = True,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
         super().__init__(tgnn_wrapper, sampling_strategy, candidates_size=candidates_size, sample_size=candidates_size,
-                         verbose=verbose, pretrained_sampler_parameters=pretrained_sampler_parameters)
+                         verbose=verbose, approximate_predictions=approximate_predictions,
+                         pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.max_steps = max_steps
         self.known_states = {}
 
     def _run_node_expansion(self, explained_edge_id: int, node_to_expand: MCTSTreeNode, sampler: EdgeSampler):
         edge_ids_to_exclude = node_to_expand.get_parent_ids()
-        prediction = self.calculate_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID],
+        prediction = self.calculate_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID].to_numpy(),
                                                         cf_example_events=edge_ids_to_exclude,
                                                         explained_event_id=explained_edge_id,
                                                         candidate_event_id=node_to_expand.edge_id,
-                                                        memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
+                                                        memory_label=EXPLAINED_EVENT_MEMORY_LABEL,
+                                                        original_prediction=node_to_expand.original_prediction)
 
         self._expand_node(explained_edge_id, node_to_expand, prediction, sampler)
 

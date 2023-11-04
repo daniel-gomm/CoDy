@@ -47,7 +47,8 @@ class TGNNWrapper:
         raise NotImplementedError
 
     def compute_edge_probabilities_for_subgraph(self, event_id, edges_to_drop: np.ndarray,
-                                                result_as_logit: bool = False) -> (torch.Tensor, torch.Tensor):
+                                                result_as_logit: bool = False,
+                                                edge_ids_to_keep: np.ndarray = None) -> (torch.Tensor, torch.Tensor):
         raise NotImplementedError
 
     def get_memory(self):

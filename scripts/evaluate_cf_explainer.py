@@ -128,6 +128,8 @@ if __name__ == '__main__':
                              'been initialized yet')
     parser.add_argument('--max_time', type=int, default=72,
                         help='Maximal runtime (hours)')
+    parser.add_argument('--no_approximation', action='store_true',
+                        help='Provide if approximation should be disabled')
 
     args = parse_args(parser)
 
@@ -159,13 +161,15 @@ if __name__ == '__main__':
                                                                   candidates_size=args.candidates_size,
                                                                   sample_size=args.sample_size,
                                                                   pretrained_sampler_parameters=sampler_params,
-                                                                  verbose=args.debug))
+                                                                  verbose=args.debug,
+                                                                  approximate_predictions=not args.no_approximation))
             else:
                 explainers.append(EvaluationGreedyCFExplainer(tgn_wrapper, sampling_strategy=args.sampler,
                                                               candidates_size=args.candidates_size,
                                                               sample_size=args.sample_size,
                                                               pretrained_sampler_parameters=sampler_params,
-                                                              verbose=args.debug))
+                                                              verbose=args.debug,
+                                                              approximate_predictions=not args.no_approximation))
         case 'searching':
             if args.sampler == 'all':
                 for sampler in SAMPLERS:
@@ -173,24 +177,28 @@ if __name__ == '__main__':
                         EvaluationSearchingCFExplainer(tgn_wrapper, sampling_strategy=sampler,
                                                        candidates_size=args.candidates_size,
                                                        sample_size=args.sample_size, verbose=args.debug,
-                                                       pretrained_sampler_parameters=sampler_params))
+                                                       pretrained_sampler_parameters=sampler_params,
+                                                       approximate_predictions=not args.no_approximation))
             else:
                 explainers.append(EvaluationSearchingCFExplainer(tgn_wrapper, sampling_strategy=args.sampler,
                                                                  candidates_size=args.candidates_size,
                                                                  sample_size=args.sample_size, verbose=args.debug,
-                                                                 pretrained_sampler_parameters=sampler_params))
+                                                                 pretrained_sampler_parameters=sampler_params,
+                                                                 approximate_predictions=not args.no_approximation))
         case 'cftgnnexplainer':
             if args.sampler == 'all':
                 for sampler in SAMPLERS:
                     explainers.append(EvaluationCFTGNNExplainer(tgn_wrapper, sampling_strategy=sampler,
                                                                 candidates_size=args.candidates_size,
                                                                 max_steps=250, verbose=args.debug,
-                                                                pretrained_sampler_parameters=sampler_params))
+                                                                pretrained_sampler_parameters=sampler_params,
+                                                                approximate_predictions=not args.no_approximation))
             else:
                 explainers.append(EvaluationCFTGNNExplainer(tgn_wrapper, sampling_strategy=args.sampler,
                                                             candidates_size=args.candidates_size,
                                                             max_steps=250, verbose=args.debug,
-                                                            pretrained_sampler_parameters=sampler_params))
+                                                            pretrained_sampler_parameters=sampler_params,
+                                                            approximate_predictions=not args.no_approximation))
         case _:
             raise NotImplementedError
 

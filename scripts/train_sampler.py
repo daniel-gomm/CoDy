@@ -64,6 +64,7 @@ def extract_training_data(explainer: EvaluationExplainer, emb: Embedding, epoch_
 
             curr_d_prediction = explainer.calculate_subgraph_prediction(sample, np.unique(removed_events).tolist(),
                                                                         event_id, candidate_event_id=event_id + 1,
+                                                                        original_prediction=0.0,  # Ignore
                                                                         memory_label=CUR_IT_MIN_EVENT_MEM_LBL)
 
             sample_embeddings, explained_edge_embedding = emb.get_embeddings(sample, event_id)
@@ -79,6 +80,7 @@ def extract_training_data(explainer: EvaluationExplainer, emb: Embedding, epoch_
                                                                               np.unique(removed_events).tolist(),
                                                                               event_id,
                                                                               candidate_event_id=sample_edge_id,
+                                                                              original_prediction=0.0,  # Ignore
                                                                               memory_label=CUR_IT_MIN_EVENT_MEM_LBL)
                 sample_true_prediction_deltas.append(calculate_prediction_delta(curr_d_prediction,
                                                                                 subgraph_prediction))

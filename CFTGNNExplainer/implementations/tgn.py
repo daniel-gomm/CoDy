@@ -90,7 +90,7 @@ class TGNWrapper(TGNNWrapper):
         self.model.detach_memory()
 
     def rollout_until_event(self, event_id: int = None, batch_data: BatchData = None,
-                            progress_bar: ProgressBar = None) -> None:
+                            progress_bar: ProgressBar = None, edge_ids_to_keep: np.ndarray = None) -> None:
         assert event_id is not None or batch_data is not None
         if batch_data is None:
             batch_data = self.dataset.get_batch_data(self.latest_event_id, event_id)
@@ -104,14 +104,27 @@ class TGNWrapper(TGNNWrapper):
                     progress_bar.next()
                 batch_start = batch_id * self.batch_size
                 batch_end = min((batch_id + 1) * self.batch_size, len(batch_data.source_node_ids))
-                self.model.compute_temporal_embeddings(source_nodes=batch_data.source_node_ids[batch_start:batch_end],
-                                                       destination_nodes=batch_data.target_node_ids[batch_start:
-                                                                                                    batch_end],
-                                                       edge_times=batch_data.timestamps[batch_start:batch_end],
-                                                       edge_idxs=batch_data.edge_ids[batch_start:batch_end],
+                batch_id += 1
+
+                source_nodes = batch_data.source_node_ids[batch_start:batch_end]
+                destination_nodes = batch_data.target_node_ids[batch_start:batch_end]
+                edge_times = batch_data.timestamps[batch_start:batch_end]
+                edge_idxs = batch_data.edge_ids[batch_start:batch_end]
+                if edge_ids_to_keep is not None:
+                    # Mask out all events that are not in the provided list
+                    edge_mask = np.isin(edge_idxs, edge_ids_to_keep)
+                    source_nodes = source_nodes[edge_mask]
+                    destination_nodes = destination_nodes[edge_mask]
+                    edge_times = edge_times[edge_mask]
+                    edge_idxs = edge_idxs[edge_mask]
+                    if len(edge_idxs) == 0:
+                        continue
+                self.model.compute_temporal_embeddings(source_nodes=source_nodes,
+                                                       destination_nodes=destination_nodes,
+                                                       edge_times=edge_times,
+                                                       edge_idxs=edge_idxs,
                                                        negative_nodes=None)
                 self.model.memory.detach_memory()
-                batch_id += 1
 
         self.latest_event_id = event_id
 
@@ -136,20 +149,16 @@ class TGNWrapper(TGNNWrapper):
                                                      edge_ids, self.n_neighbors, result_as_logit, perform_memory_update)
 
     def compute_edge_probabilities_for_subgraph(self, event_id, edges_to_drop: np.ndarray,
-                                                result_as_logit: bool = False) -> (torch.Tensor, torch.Tensor):
+                                                result_as_logit: bool = False,
+                                                edge_ids_to_keep: np.ndarray = None) -> (torch.Tensor, torch.Tensor):
         if not self.evaluation_mode:
             self.logger.info('Model not in evaluation mode. Do not use predictions for evaluation purposes!')
-        edge_ids = self.dataset.edge_ids
-        edge_ids = edge_ids[edge_ids < event_id]
-        edge_ids = edge_ids[edge_ids > self.latest_event_id]
-        edge_ids = edge_ids[~np.isin(edge_ids, edges_to_drop)]
-        source_nodes, target_nodes, timestamps, edge_ids = self.extract_event_information(edge_ids)
         # Insert a new neighborhood finder so that the model does not consider dropped edges
         original_ngh_finder = self.model.neighbor_finder
         self.model.set_neighbor_finder(get_neighbor_finder(to_data_object(self.dataset, edges_to_drop=edges_to_drop),
                                                            uniform=False))
         # Rollout the events from the subgraph
-        self.rollout_until_event(batch_data=BatchData(source_nodes, target_nodes, timestamps, edge_ids))
+        self.rollout_until_event(event_id=event_id, edge_ids_to_keep=edge_ids_to_keep)
 
         source_node, target_node, timestamp, edge_id = self.extract_event_information(event_ids=event_id)
         probabilities = self.compute_edge_probabilities(source_node, target_node, timestamp, edge_id,
