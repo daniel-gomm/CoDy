@@ -28,17 +28,17 @@ evaluate_explainer() {
   greedy)
     echo "Selected sampler $3"
     SAMPLER_MODEL_PATH="$PARENT_DIR/resources/models/$1/sampler/$1_dynamic_sampler.pth"
-    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer greedy --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 64 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only --max_time 10
+    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer greedy --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 64 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only --max_time "$4"
     ;;
   searching)
     echo "Selected sampler $3"
     SAMPLER_MODEL_PATH="$PARENT_DIR/resources/models/$1/sampler/$1_dynamic_sampler.pth"
-    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer searching --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 64 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only --max_time 10 --max_steps 50
+    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer searching --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 64 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only --max_time "$4" --max_steps 50
     ;;
   cftgnnexplainer)
     echo "Selected sampler $3"
     SAMPLER_MODEL_PATH="$PARENT_DIR/resources/models/$1/sampler/$1_dynamic_sampler.pth"
-    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer cftgnnexplainer --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 64 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only --max_time 10 --max_steps 300
+    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer cftgnnexplainer --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 64 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only --max_time "$4" --max_steps 300
     ;;
   *)
     show_help
@@ -68,10 +68,14 @@ if [ $# -lt 2 ]; then
 else
   test_exists "$1" "${DATASET_NAMES[@]}"
   test_exists "$2" "${EXPLAINER_TYPES[@]}"
+  time="36000" # 10 Hours default value
+  if [ $# -gt 3 ]; then
+    time="$4"
+  fi
   if [ $# -gt 2 ]; then
     test_exists "$3" "${ALL_SAMPLER_TYPES[@]}"
     echo "Evaluating explainer $2 with sampler $3 on dataset $1"
-    evaluate_explainer "$1" "$2" "$3"
+    evaluate_explainer "$1" "$2" "$3" "$time"
   elif value_in_array "$2" "${FACTUAL_EXPLAINER_TYPES[@]}"; then
     echo "Evaluating explainer $2 on dataset $1"
     evaluate_explainer "$1" "$2"
@@ -81,7 +85,7 @@ else
         echo "Results for sampler $sampler already exist."
       else
         echo "Evaluating explainer $2 with sampler $sampler on dataset $1"
-        evaluate_explainer "$1" "$2" "$sampler"
+        evaluate_explainer "$1" "$2" "$sampler" "$time"
       fi
     done
   fi

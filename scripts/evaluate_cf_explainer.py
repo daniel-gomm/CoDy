@@ -126,8 +126,8 @@ if __name__ == '__main__':
     parser.add_argument('--number_of_explained_events', type=int, default=1000,
                         help='Number of event ids to explain. Only has an effect if the explained_ids file has not '
                              'been initialized yet')
-    parser.add_argument('--max_time', type=int, default=72,
-                        help='Maximal runtime (hours)')
+    parser.add_argument('--max_time', type=int, default=2400,
+                        help='Maximal runtime (minutes)')
     parser.add_argument('--max_steps', type=int, default=100,
                         help='Maximum number of search steps to perform.')
     parser.add_argument('--no_approximation', action='store_true',
@@ -212,6 +212,6 @@ if __name__ == '__main__':
                     f'Already processed {len(encountered_event_ids)}/{len(event_ids_to_explain)} events.')
         event_ids_to_explain = event_ids_to_explain[~np.isin(event_ids_to_explain, encountered_event_ids)]
 
-    evaluate(explainers, event_ids_to_explain, args.optimize, args.max_time * 3600)
+    evaluate(explainers, event_ids_to_explain, args.optimize, args.max_time * 60)
     for explainer in explainers:
         export_explanations(explainer.explanation_results_list, construct_results_save_path(args, explainer))
