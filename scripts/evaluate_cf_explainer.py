@@ -11,7 +11,8 @@ from CFTGNNExplainer.data import TrainTestDatasetParameters
 from CFTGNNExplainer.embedding import DynamicEmbedding, StaticEmbedding
 from CFTGNNExplainer.sampler import create_embedding_model, PretrainedEdgeSamplerParameters
 from common import (add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args,
-                    create_tgn_wrapper_from_args, parse_args, get_event_ids_from_file, SAMPLERS)
+                    create_tgn_wrapper_from_args, parse_args, get_event_ids_from_file, SAMPLERS, column_to_int_array,
+                    column_to_float_array)
 
 from scripts.evaluation_explainers import EvaluationExplainer, EvaluationCounterFactualExample, \
     EvaluationGreedyCFExplainer, EvaluationSearchingCFExplainer, EvaluationCFTGNNExplainer
@@ -20,16 +21,6 @@ from CFTGNNExplainer.utils import ProgressBar
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
-
-
-def column_to_int_array(df, column_name):
-    df[column_name] = (df[column_name].str.rstrip(']').str.lstrip('[')
-                       .replace('\n', '').str.split().apply(lambda x: np.array([int(item) for item in x])))
-
-
-def column_to_float_array(df, column_name):
-    df[column_name] = (df[column_name].str.rstrip(']').str.lstrip('[')
-                       .replace('\n', '').str.split().apply(lambda x: np.array([float(item) for item in x])))
 
 
 def evaluate(evaluated_explainers: List[EvaluationExplainer], explained_event_ids: np.ndarray, optimize: bool = False,

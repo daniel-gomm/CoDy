@@ -157,6 +157,9 @@ class TGNWrapper(TGNNWrapper):
         original_ngh_finder = self.model.neighbor_finder
         self.model.set_neighbor_finder(get_neighbor_finder(to_data_object(self.dataset, edges_to_drop=edges_to_drop),
                                                            uniform=False))
+        if edge_ids_to_keep is None:
+            edge_ids_to_keep = self.dataset.edge_ids[~np.isin(self.dataset.edge_ids, edges_to_drop)]
+            edge_ids_to_keep = edge_ids_to_keep[edge_ids_to_keep < event_id]
         # Rollout the events from the subgraph
         self.rollout_until_event(event_id=event_id, edge_ids_to_keep=edge_ids_to_keep)
 

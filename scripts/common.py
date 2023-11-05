@@ -43,6 +43,16 @@ def add_model_training_arguments(parser: ArgumentParser):
     parser.add_argument('-e', '--epochs', type=int, default=50, help='Number of epochs to train the model for.')
 
 
+def column_to_int_array(df, column_name):
+    df[column_name] = (df[column_name].str.rstrip(']').str.lstrip('[')
+                       .replace('\n', '').str.split().apply(lambda x: np.array([int(item) for item in x])))
+
+
+def column_to_float_array(df, column_name):
+    df[column_name] = (df[column_name].str.rstrip(']').str.lstrip('[')
+                       .replace('\n', '').str.split().apply(lambda x: np.array([float(item) for item in x])))
+
+
 def create_dataset_from_args(args: Namespace, parameters: TrainTestDatasetParameters | None = None) -> (
         ContinuousTimeDynamicGraphDataset):
     if parameters is None:
