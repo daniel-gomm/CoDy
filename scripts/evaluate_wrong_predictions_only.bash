@@ -19,11 +19,11 @@ evaluate_explainer() {
   case $2 in
   pg_explainer)
     PG_EXP_MODEL_PATH="$PARENT_DIR/resources/models/$1/pg_explainer/$1_final.pth"
-    python "$SCRIPT_DIR/evaluate_factual_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --explainer_model_path "$PG_EXP_MODEL_PATH" --model "$TGN_PATH" --candidates_size 30 --explainer pg_explainer --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR/results_$1_$2.csv" --wrong_predictions_only
+    python "$SCRIPT_DIR/evaluate_factual_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --explainer_model_path "$PG_EXP_MODEL_PATH" --model "$TGN_PATH" --candidates_size 30 --explainer pg_explainer --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR/results_$1_$2_wrong_only.csv" --wrong_predictions_only
     ;;
   tgnnexplainer)
     PG_EXP_MODEL_PATH="$PARENT_DIR/resources/models/$1/pg_explainer/$1_final.pth"
-    python "$SCRIPT_DIR/evaluate_factual_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --explainer_model_path "$PG_EXP_MODEL_PATH" --model "$TGN_PATH" --candidates_size 30 --explainer t_gnnexplainer --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR/results_$1_$2.csv" --rollout 500 --mcts_save_dir "$RESULTS_SAVE_DIR/" --wrong_predictions_only
+    python "$SCRIPT_DIR/evaluate_factual_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --explainer_model_path "$PG_EXP_MODEL_PATH" --model "$TGN_PATH" --candidates_size 30 --explainer t_gnnexplainer --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR/results_$1_$2_wrong_only.csv" --rollout 500 --mcts_save_dir "$RESULTS_SAVE_DIR/" --wrong_predictions_only
     ;;
   greedy)
     echo "Selected sampler $3"
