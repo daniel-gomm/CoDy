@@ -51,6 +51,58 @@ def find_best_node_result(all_nodes, min_atoms=6):
     return best_node
 
 
+def k_hop_temporal_subgraph(df, num_hops, event_idx):
+    """
+    df: temporal graph, events stream. DataFrame. An user-item bipartite graph.
+    node: center user node
+    num_hops: number of hops of the subgraph
+    event_idx: should start from 1. 1, 2, 3, ...
+    return: a sub DataFrame
+
+    """
+    df_new = df.copy()
+    df_new = df_new[df_new[COL_ID] <= event_idx]  # ignore events latter than event_idx
+
+    center_node = df_new[df_new[COL_ID] == event_idx][COL_NODE_U].values[0]  # event_idx represents e_idx
+
+    subsets = [[center_node], ]
+    num_nodes = df_new[COL_NODE_I].max() + 1
+
+    node_mask = np.zeros((num_nodes,), dtype=bool)
+    source_nodes = np.array(df_new[COL_NODE_U], dtype=int)  # user nodes, 0--k-1
+    target_nodes = np.array(df_new[COL_NODE_I],
+                            dtype=int)  # item nodes, k--N-1, N is the number of total users and items
+
+    for _ in range(num_hops):
+        node_mask.fill(False)
+        node_mask[np.array(subsets[-1])] = True
+        edge_mask = node_mask[source_nodes]
+        new_nodes = target_nodes[edge_mask]  # new neighbors
+        subsets.append(np.unique(new_nodes).tolist())
+
+        source_nodes, target_nodes = target_nodes, source_nodes  # regarded as undirected graph
+
+    subset = np.unique(np.concatenate([np.array(nodes) for nodes in subsets]))  # selected temporal subgraph nodes
+
+    assert center_node in subset
+
+    source_nodes = np.array(df_new[COL_NODE_U], dtype=int)
+    target_nodes = np.array(df_new[COL_NODE_I], dtype=int)
+
+    node_mask.fill(False)
+    node_mask[subset] = True
+
+    user_mask = node_mask[source_nodes]  # user mask for events
+    item_mask = node_mask[target_nodes]  # item mask for events
+
+    edge_mask = user_mask & item_mask  # event mask
+
+    subgraph_df = df_new.iloc[edge_mask, :].copy()
+    assert center_node in subgraph_df[COL_NODE_U].values
+
+    return subgraph_df
+
+
 class MCTSNode(object):
     def __init__(self, coalition: list = None, created_by_remove: int = None,
                  c_puct: float = 10.0, w: float = 0, n: int = 0, p: float = 0, sparsity: float = 1,
@@ -246,7 +298,7 @@ class MCTS(object):
 
         max_event_idx = max(self.root.coalition)
         curr_t = self.events[COL_TIMESTAMP][max_event_idx]
-        ts = self.events[COL_TIMESTAMP][self.events['e_idx'].isin(node.coalition)].values
+        ts = self.events[COL_TIMESTAMP][self.events[COL_ID].isin(node.coalition)].values
         delta_ts = curr_t - ts
         t_score_exp = np.exp(beta * delta_ts)
         t_score_exp = np.sum(t_score_exp)
@@ -292,7 +344,7 @@ class MCTS(object):
         self.state_map = {self.root_key: self.root}
 
         max_event_idx = max(self.root.coalition)
-        self.curr_t = self.events[COL_TIMESTAMP][self.events.e_idx == max_event_idx].values[0]
+        self.curr_t = self.events[COL_TIMESTAMP][max_event_idx]
 
     @staticmethod
     def _node_key(coalition):
@@ -340,8 +392,6 @@ class TGNNExplainer(Explainer):
         self.mcts_saved_dir = mcts_saved_dir
         self.pg_explainer = pg_explainer_model
 
-        self.tgnn.dataset.events['e_idx'] = self.tgnn.dataset.events[COL_ID].copy()
-
     def write_from_mcts_node_list(self, mcts_node_list):
         if isinstance(mcts_node_list[0], MCTSNode):
             ret_list = [node.info for node in mcts_node_list]
@@ -378,9 +428,9 @@ class TGNNExplainer(Explainer):
         return candidate_initial_weights, original_prediction
 
     def get_scores(self, event_idx: Optional[int] = None,
-                   candidate_initial_weights=None):
-        self.tgnn.initialize(event_idx)
-        subgraph = self.subgraph_generator.get_k_hop_temporal_subgraph(num_hops=self.num_hops, base_event_id=event_idx)
+                   candidate_initial_weights=None, subgraph=None):
+        #subgraph = k_hop_temporal_subgraph(self.tgnn.dataset.events, self.num_hops, event_idx)
+        self.tgnn.initialize(event_idx, subgraph_event_ids=subgraph[COL_ID].to_numpy())
         assert event_idx is not None
         # search
         self.mcts_state_map = MCTS(events=subgraph,
@@ -406,13 +456,15 @@ class TGNNExplainer(Explainer):
         start_time = time.time_ns()
         self.tgnn.set_evaluation_mode(True)
         self.tgnn.reset_model()
+        subgraph = k_hop_temporal_subgraph(self.tgnn.dataset.events, self.num_hops, explained_event_id)
         with torch.no_grad():
-            self.tgnn.initialize(explained_event_id)
+            self.tgnn.initialize(explained_event_id, subgraph_event_ids=subgraph[COL_ID].to_numpy())
             candidate_initial_weights, original_prediction = self._get_candidate_weights(event_idx=explained_event_id)
             init_end_time = time.time_ns()
 
         tree_nodes, tree_node_x = self.get_scores(event_idx=explained_event_id,
-                                                  candidate_initial_weights=candidate_initial_weights)
+                                                  candidate_initial_weights=candidate_initial_weights,
+                                                  subgraph=subgraph)
         self._save_mcts_recorder(explained_event_id)  # always store
         if self.save_results:  # sometimes store
             self._save_mcts_nodes_info(tree_nodes, explained_event_id)
@@ -434,7 +486,7 @@ class TGNNExplainer(Explainer):
         timings['total_duration'] = end_time - start_time
         statistics['oracle_calls'] = self.mcts_state_map.oracle_calls
         statistics['candidate_size'] = len(candidate_events)
-        statistics['candidates'] = candidate_events
+        statistics['candidates'] = np.array(candidate_events)
 
         tree_nodes.sort(key=lambda node: node.P, reverse=True)
         best_prediction = tree_nodes[0].P
@@ -484,7 +536,7 @@ class TGNNExplainer(Explainer):
         fidelity_list = best_fidelity_at_depth[indices]
         best_fidelity_list = best_fidelity_list[indices]
 
-        return sparsity_thresholds.tolist(), fidelity_list.tolist(), best_fidelity_list.tolist()
+        return sparsity_thresholds, fidelity_list, best_fidelity_list
 
     def _save_mcts_recorder(self, event_idx):
         # save records

@@ -8,6 +8,7 @@ from TTGN.model.tgn import TGN
 
 from CFTGNNExplainer.connector import TGNNWrapper
 from CFTGNNExplainer.data import ContinuousTimeDynamicGraphDataset, BatchData
+from CFTGNNExplainer.constants import COL_ID
 from TTGN.utils.data_processing import compute_time_statistics
 from TTGN.utils.utils import NeighborFinder
 
@@ -15,8 +16,8 @@ from TTGN.utils.utils import NeighborFinder
 # Implementation of the adjusted TGN model used by Xia et al. 2023 (https://openreview.net/forum?id=BR_ZhvcYbGJ)
 
 def find_candidate_events(dataset: ContinuousTimeDynamicGraphDataset, neighborhood_finder: NeighborFinder,
-                          target_event_idx: int, num_hops: int, candidates_size: int):
-    target_mask = np.isin(dataset.edge_ids, target_event_idx)
+                          target_event_idx: int, num_hops: int, candidates_size: int, subgraph_event_ids):
+    target_mask = np.isin(dataset.events[COL_ID], target_event_idx)
     target_nodes = dataset.target_node_ids[target_mask][0]
     source_nodes = dataset.source_node_ids[target_mask][0]
     timestamps = dataset.timestamps[target_mask][0]
@@ -33,7 +34,7 @@ def find_candidate_events(dataset: ContinuousTimeDynamicGraphDataset, neighborho
             last_nodes,
             last_ts,
             n_neighbors=candidates_size,
-            # edge_idx_preserve_list=edge_idx_preserve_list,  # NOTE: not needed?
+            edge_idx_preserve_list=subgraph_event_ids,  # NOTE: not needed?
         )
 
         out_ngh_node_batch = out_ngh_node_batch.flatten()
@@ -135,20 +136,20 @@ class TTGNWrapper(TGNNWrapper):
 
         self.latest_event_id = event_id
 
-    def initialize(self, event_id: int, show_progress: bool = False, memory_label: str = None):
+    def initialize(self, event_id: int, show_progress: bool = False, memory_label: str = None, subgraph_event_ids = None):
         if show_progress:
             print(f'Initializing model for event {event_id}')
 
         (self.candidate_events,
          self.unique_edge_ids,
          self.base_events,
-         original_score) = self._initialize_model(event_id, self.explanation_candidates_size)
+         original_score) = self._initialize_model(event_id, self.explanation_candidates_size, subgraph_event_ids)
         self.original_score = original_score.detach().cpu().item()
         self.last_predicted_event_id = event_id
 
-    def initialize_static(self, event_id: int):
+    def initialize_static(self, event_id: int, subgraph_event_ids):
         self.reset_model()
-        return self._initialize_model(event_id, self.explanation_candidates_size)
+        return self._initialize_model(event_id, self.explanation_candidates_size, subgraph_event_ids)
 
     def predict(self, event_id: int, candidate_event_ids=None, edge_weights=None, edge_id_preserve_list=None):
         source_node, target_node, timestamp, edge_id = self.extract_event_information(event_id)
@@ -167,9 +168,9 @@ class TTGNWrapper(TGNNWrapper):
                                                           f'not match with the provided event id {event_id}')
         return self.candidate_events
 
-    def _initialize_model(self, event_id, num_neighbors: int):
+    def _initialize_model(self, event_id, num_neighbors: int, subgraph_event_ids):
         candidate_events, unique_edge_ids = find_candidate_events(self.dataset, self.model.neighbor_finder, event_id,
-                                                                  self.num_hops, num_neighbors)
+                                                                  self.num_hops, num_neighbors, subgraph_event_ids)
         base_events = list(filter(lambda x: x not in set(candidate_events), unique_edge_ids))
         source_nodes, target_nodes, timestamps, event_ids = self.extract_event_information(event_id)
 

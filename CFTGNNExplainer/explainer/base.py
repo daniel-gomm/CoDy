@@ -159,7 +159,7 @@ def calculate_prediction_delta(original_prediction: float, prediction_to_assess:
 class Explainer:
 
     def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', candidates_size: int = 75,
-                 sample_size: int = 10, verbose: bool = False,
+                 sample_size: int = 10, verbose: bool = False, approximate_predictions: bool = True,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
         self.tgnn = tgnn_wrapper
         self.dataset = self.tgnn.dataset
@@ -171,6 +171,7 @@ class Explainer:
         self.candidates_size = candidates_size
         self.sample_size = sample_size
         self.verbose = verbose
+        self.approximate_predictions = approximate_predictions
         self.pretrained_sampler_parameters = pretrained_sampler_parameters
 
     def _create_sampler(self, subgraph: pd.DataFrame, explained_event_id: int,
@@ -228,6 +229,7 @@ class Explainer:
 
     def calculate_subgraph_prediction(self, candidate_events: np.ndarray, cf_example_events: List[int],
                                       explained_event_id: int, candidate_event_id: int,
+                                      original_prediction: float,
                                       memory_label: str = EXPLAINED_EVENT_MEMORY_LABEL) -> float:
         """
         Calculate the prediction score for the explained event, when excluding the candidate events
@@ -236,14 +238,28 @@ class Explainer:
         @param explained_event_id: ID of the explained event
         @param candidate_event_id: ID of the currently investigated candidate event
         @param memory_label: Provide name of memory label if it should be different from the default
+        @param original_prediction: Original prediction when considering all events
         @return: Prediction when excluding the candidate events
         """
         self.tgnn.initialize(np.min(candidate_events) - 1, show_progress=False,
                              memory_label=memory_label)
+        full_cf_example_events = np.array(cf_example_events + [candidate_event_id])
+        edges_to_keep = None
+        if self.approximate_predictions:
+            edges_to_keep = candidate_events[~np.isin(candidate_events, full_cf_example_events)]
+
         subgraph_pred, _ = self.tgnn.compute_edge_probabilities_for_subgraph(explained_event_id,
-                                                                             np.array(cf_example_events +
-                                                                                      [candidate_event_id]),
-                                                                             result_as_logit=True)
+                                                                             full_cf_example_events,
+                                                                             result_as_logit=True,
+                                                                             edge_ids_to_keep=edges_to_keep)
+        if original_prediction * subgraph_pred < 0 and self.approximate_predictions:
+            # Approximated prediction is counterfactual -> Get the true score
+            self.tgnn.initialize(np.min(candidate_events) - 1, show_progress=False,
+                                 memory_label=memory_label)
+            subgraph_pred, _ = self.tgnn.compute_edge_probabilities_for_subgraph(explained_event_id,
+                                                                                 full_cf_example_events,
+                                                                                 result_as_logit=True,
+                                                                                 edge_ids_to_keep=None)
         subgraph_pred = subgraph_pred.detach().cpu().item()
         return subgraph_pred
 

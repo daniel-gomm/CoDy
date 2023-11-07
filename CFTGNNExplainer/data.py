@@ -160,8 +160,15 @@ class SubgraphGenerator:
 
         return subgraph_events
 
-    def get_fixed_size_k_hop_temporal_subgraph(self, num_hops: int, base_event_id: int, size: int,
-                                               directed: bool = False):
+    def get_fixed_size_k_hop_temporal_subgraph(self, num_hops: int, base_event_id: int, size: int):
+        candidate_events = self.get_k_hop_temporal_subgraph(num_hops, base_event_id=base_event_id)
+
+        if len(candidate_events) > size:
+            return candidate_events[-size:]
+        return candidate_events
+
+    def get_fixed_size_k_hop_temporal_forward_subgraph(self, num_hops: int, base_event_id: int, size: int,
+                                                       directed: bool = False):
         candidate_events = self.get_k_hop_temporal_subgraph(num_hops, base_event_id=base_event_id)
 
         reached_nodes = _extract_center_node_ids(candidate_events, [base_event_id], directed)

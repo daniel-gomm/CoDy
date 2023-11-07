@@ -107,7 +107,7 @@ class TPGExplainer(Explainer):
         statistics = {
             'oracle_calls': 0,
             'candidate_size': len(candidate_events),
-            'candidates': candidate_events.tolist()
+            'candidates': candidate_events
         }
         return FactualExplanation(explained_event_id, candidate_events, edge_weights,
                                   self.tgnn.original_score, timings, statistics)
@@ -130,7 +130,7 @@ class TPGExplainer(Explainer):
             fidelity_list.append(fid)
 
         fidelity_best = greedy_highest_value_over_array(fidelity_list)
-        return sparsity_list.tolist(), fidelity_list, fidelity_best.tolist()
+        return sparsity_list, np.array(fidelity_list), fidelity_best
 
     @staticmethod
     def _loss(masked_probability, original_probability):

@@ -49,10 +49,11 @@ class GreedyCFExplainer(Explainer):
 
         if type(sampler) is OneBestEdgeSampler:
             for child_id in sampler.rank_subgraph(base_event_id=explained_event_id, excluded_events=np.array([])):
-                prediction = self.calculate_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID],
+                prediction = self.calculate_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID].to_numpy(),
                                                                 cf_example_events=[],
                                                                 explained_event_id=explained_event_id,
                                                                 candidate_event_id=child_id,
+                                                                original_prediction=original_prediction,
                                                                 memory_label=EXPLAINED_EVENT_MEMORY_LABEL)
                 child_node = GreedyTreeNode(child_id, parent=root_node, original_prediction=original_prediction,
                                             prediction=prediction)
@@ -90,6 +91,7 @@ class GreedyCFExplainer(Explainer):
                                                                                   [node_to_expand.edge_id],
                                                                 explained_event_id=explained_event_id,
                                                                 candidate_event_id=candidate_event_id,
+                                                                original_prediction=original_prediction,
                                                                 memory_label=CUR_IT_MIN_EVENT_MEM_LBL)
                 child_node = GreedyTreeNode(candidate_event_id, parent=node_to_expand,
                                             original_prediction=original_prediction, prediction=prediction)

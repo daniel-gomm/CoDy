@@ -133,9 +133,11 @@ class SearchingCFExplainer(Explainer):
 
     def __init__(self, tgnn_wrapper: TGNNWrapper, candidates_size: int = 75, sample_size: int = 10,
                  sampling_strategy: str = 'recent', max_steps: int = 50, verbose: bool = False,
+                 approximate_predictions: bool = True,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
         super().__init__(tgnn_wrapper, sampling_strategy, candidates_size=candidates_size, sample_size=sample_size,
-                         verbose=verbose, pretrained_sampler_parameters=pretrained_sampler_parameters)
+                         verbose=verbose, approximate_predictions=approximate_predictions,
+                         pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.max_steps = max_steps
 
     def expand_node(self, explained_edge_id: int, node_to_expand: BatchSearchTreeNode, sampler: EdgeSampler,
@@ -160,6 +162,7 @@ class SearchingCFExplainer(Explainer):
                                                             cf_example_events=edge_ids_to_exclude,
                                                             explained_event_id=explained_edge_id,
                                                             candidate_event_id=edge_id,
+                                                            original_prediction=original_prediction,
                                                             memory_label=CUR_IT_MIN_EVENT_MEM_LBL)
             new_child = BatchSearchTreeNode(edge_id, node_to_expand, prediction, original_prediction)
             node_to_expand.children.append(new_child)

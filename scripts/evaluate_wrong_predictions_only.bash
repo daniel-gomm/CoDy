@@ -19,26 +19,26 @@ evaluate_explainer() {
   case $2 in
   pg_explainer)
     PG_EXP_MODEL_PATH="$PARENT_DIR/resources/models/$1/pg_explainer/$1_final.pth"
-    python "$SCRIPT_DIR/evaluate_factual_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --explainer_model_path "$PG_EXP_MODEL_PATH" --model "$TGN_PATH" --candidates_size 30 --explainer pg_explainer --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR/results_$1_$2.csv" --wrong_predictions_only
+    python "$SCRIPT_DIR/evaluate_factual_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --explainer_model_path "$PG_EXP_MODEL_PATH" --model "$TGN_PATH" --candidates_size 30 --explainer pg_explainer --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR/results_$1_$2_wrong_only.csv" --wrong_predictions_only --max_time "$3"
     ;;
   tgnnexplainer)
     PG_EXP_MODEL_PATH="$PARENT_DIR/resources/models/$1/pg_explainer/$1_final.pth"
-    python "$SCRIPT_DIR/evaluate_factual_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --explainer_model_path "$PG_EXP_MODEL_PATH" --model "$TGN_PATH" --candidates_size 30 --explainer t_gnnexplainer --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR/results_$1_$2.csv" --rollout 500 --mcts_save_dir "$RESULTS_SAVE_DIR/" --wrong_predictions_only
+    python "$SCRIPT_DIR/evaluate_factual_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --explainer_model_path "$PG_EXP_MODEL_PATH" --model "$TGN_PATH" --candidates_size 30 --explainer t_gnnexplainer --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR/results_$1_$2_wrong_only.csv" --rollout 500 --mcts_save_dir "$RESULTS_SAVE_DIR/" --wrong_predictions_only --max_time "$3"
     ;;
   greedy)
     echo "Selected sampler $3"
     SAMPLER_MODEL_PATH="$PARENT_DIR/resources/models/$1/sampler/$1_dynamic_sampler.pth"
-    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer greedy --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 50 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only
+    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer greedy --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 64 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only --max_time "$4"
     ;;
   searching)
     echo "Selected sampler $3"
     SAMPLER_MODEL_PATH="$PARENT_DIR/resources/models/$1/sampler/$1_dynamic_sampler.pth"
-    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer searching --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 50 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only
+    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer searching --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 64 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only --max_time "$4" --max_steps 50
     ;;
   cftgnnexplainer)
     echo "Selected sampler $3"
     SAMPLER_MODEL_PATH="$PARENT_DIR/resources/models/$1/sampler/$1_dynamic_sampler.pth"
-    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer cftgnnexplainer --number_of_explained_events 10 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --sample_size 10 --candidates_size 50 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only
+    python "$SCRIPT_DIR/evaluate_cf_explainer.py" -d "$PROCESSED_DATA_DIR/$1" --bipartite --cuda --model "$TGN_PATH" --explainer cftgnnexplainer --number_of_explained_events 200 --explained_ids "$EXPLAINED_IDS_PATH" --results "$RESULTS_SAVE_DIR" --dynamic --predict_for_each_sample --candidates_size 64 --sampler "$3" --sampler_model_path "$SAMPLER_MODEL_PATH" --wrong_predictions_only --max_time "$4" --max_steps 300
     ;;
   *)
     show_help
@@ -68,21 +68,23 @@ if [ $# -lt 2 ]; then
 else
   test_exists "$1" "${DATASET_NAMES[@]}"
   test_exists "$2" "${EXPLAINER_TYPES[@]}"
-  if [ $# -gt 2 ]; then
+  time="600" # 10 Hours default value
+  if value_in_array "$2" "${COUNTERFACTUAL_EXPLAINER_TYPES[@]}"; then
+    if [ $# -gt 3 ]; then
+      time="$4"
+      echo "Concluding evaluation after maximum time of $time minutes"
+    fi
     test_exists "$3" "${ALL_SAMPLER_TYPES[@]}"
     echo "Evaluating explainer $2 with sampler $3 on dataset $1"
-    evaluate_explainer "$1" "$2" "$3"
+    evaluate_explainer "$1" "$2" "$3" "$time"
   elif value_in_array "$2" "${FACTUAL_EXPLAINER_TYPES[@]}"; then
+    if [ $# -gt 2 ]; then
+      time="$3"
+      echo "Concluding evaluation after maximum time of $time minutes"
+    fi
     echo "Evaluating explainer $2 on dataset $1"
-    evaluate_explainer "$1" "$2"
+    evaluate_explainer "$1" "$2" "$3"
   else
-    for sampler in "${SAMPLER_TYPES[@]}"; do
-      if [ -f "$RESULTS_DIR/$1/$2/results_$1_$2_$sampler.csv" ]; then
-        echo "Results for sampler $sampler already exist."
-      else
-        echo "Evaluating explainer $2 with sampler $sampler on dataset $1"
-        evaluate_explainer "$1" "$2" "$sampler"
-      fi
-    done
+    show_help
   fi
 fi

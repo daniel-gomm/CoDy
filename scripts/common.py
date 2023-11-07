@@ -14,7 +14,7 @@ from CFTGNNExplainer.data import ContinuousTimeDynamicGraphDataset, TrainTestDat
 from TGN.model.tgn import TGN
 from TGN.utils.utils import get_neighbor_finder
 
-SAMPLERS = ['random', 'recent', 'closest', 'pretrained', '1-best']
+SAMPLERS = ['random', 'recent', 'closest', '1-best']
 
 
 def parse_args(parser: ArgumentParser) -> Namespace:
@@ -41,6 +41,16 @@ def add_model_training_arguments(parser: ArgumentParser):
     parser.add_argument('--model_path', type=str, required=True,
                         help='Path to the directory where the model checkpoints, final model and results are saved to.')
     parser.add_argument('-e', '--epochs', type=int, default=50, help='Number of epochs to train the model for.')
+
+
+def column_to_int_array(df, column_name):
+    df[column_name] = (df[column_name].str.rstrip(']').str.lstrip('[')
+                       .replace('\n', '').str.split().apply(lambda x: np.array([int(item) for item in x])))
+
+
+def column_to_float_array(df, column_name):
+    df[column_name] = (df[column_name].str.rstrip(']').str.lstrip('[')
+                       .replace('\n', '').str.split().apply(lambda x: np.array([float(item) for item in x])))
 
 
 def create_dataset_from_args(args: Namespace, parameters: TrainTestDatasetParameters | None = None) -> (
@@ -101,26 +111,25 @@ def create_tgn_wrapper_from_args(args: Namespace, dataset: ContinuousTimeDynamic
                       batch_size=32, checkpoint_path=args.model)
 
 
-def get_event_ids_from_file(event_ids_filepath: str | None, dataset: ContinuousTimeDynamicGraphDataset,
-                            logger: logging.Logger, wrong_predictions_only: bool = False,
-                            tgn_wrapper: TGNWrapper | TTGNWrapper = None):
+def get_event_ids_from_file(event_ids_filepath: str | None, logger: logging.Logger,
+                            wrong_predictions_only: bool = False, tgn_wrapper: TGNWrapper | TTGNWrapper = None):
     if os.path.exists(event_ids_filepath):
         return np.load(event_ids_filepath)
     else:
         logger.info('No event ids to explain provided. Generating new ones...')
+        assert tgn_wrapper is not None, 'Cannot sample predictions if model is not provided'
+        tgn_wrapper.reset_model()
         if wrong_predictions_only:
-            logger.info('Generating sample consisting of wrong predictions only. This can take a while...')
-            assert tgn_wrapper is not None, 'Cannot sample wrong predictions if model is not provided'
-            tgn_wrapper.reset_model()
-            event_ids_to_explain = sample_wrong_predictions(tgn_wrapper)
+            logger.info('Generating sample consisting of wrong predictions only. This may take a while...')
+            event_ids_to_explain = sample_predictions(tgn_wrapper, False)
         else:
-            event_ids_to_explain = dataset.extract_random_event_ids(section='train')
-            event_ids_to_explain = np.array(event_ids_to_explain)
+            logger.info('Generating sample consisting of correct predictions only. This may take a while...')
+            event_ids_to_explain = sample_predictions(tgn_wrapper, True)
         np.save(event_ids_filepath, event_ids_to_explain)
         return event_ids_to_explain
 
 
-def sample_wrong_predictions(tgn_wrapper: TGNWrapper | TTGNWrapper):
+def sample_predictions(tgn_wrapper: TGNWrapper | TTGNWrapper, predictions_correct: bool):
     tgn_wrapper.set_evaluation_mode(True)
     max_event_id = np.max(tgn_wrapper.dataset.edge_ids)
     batch_data = tgn_wrapper.dataset.get_batch_data(0, max_event_id - 1)
@@ -147,9 +156,12 @@ def sample_wrong_predictions(tgn_wrapper: TGNWrapper | TTGNWrapper):
     event_ids = np.concatenate(event_ids)
 
     results = pd.DataFrame({'edge_ids': event_ids.flatten(), 'predictions': all_predictions.flatten()})
-    wrong_results = results[results['predictions'] < - 0.2]  # Wrong predictions with some margin
-    filtered_results = wrong_results[
-        wrong_results['edge_ids'] > int(tgn_wrapper.dataset.parameters.training_start * max_event_id)]
+    if predictions_correct:
+        results = results[results['predictions'] > 0.2]
+    else:
+        results = results[results['predictions'] < - 0.2]  # Wrong predictions with some margin
+    filtered_results = results[
+        results['edge_ids'] > int(tgn_wrapper.dataset.parameters.training_start * max_event_id)]
     filtered_results = filtered_results[
         filtered_results['edge_ids'] < int(tgn_wrapper.dataset.parameters.training_end * max_event_id)]
     sampled_results = filtered_results.sample(tgn_wrapper.dataset.parameters.train_items)
