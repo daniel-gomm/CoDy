@@ -95,7 +95,7 @@ class EvaluationExplainer(Explainer):
 class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
 
     def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', sample_size: int = 10,
-                 candidates_size: int = 75, verbose: bool = False, approximate_predictions: bool = True,
+                 candidates_size: int = 64, verbose: bool = False, approximate_predictions: bool = True,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
         super(GreedyCFExplainer, self).__init__(tgnn_wrapper=tgnn_wrapper, sampling_strategy=sampling_strategy,
                                                 sample_size=sample_size, candidates_size=candidates_size,
@@ -243,8 +243,8 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
 
 class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
 
-    def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', max_steps: int = 50,
-                 sample_size: int = 10, candidates_size: int = 75, verbose: bool = False,
+    def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', max_steps: int = 100,
+                 sample_size: int = 10, candidates_size: int = 64, verbose: bool = False,
                  approximate_predictions: bool = True,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
         SearchingCFExplainer.__init__(self, tgnn_wrapper=tgnn_wrapper, sampling_strategy=sampling_strategy,
@@ -367,8 +367,8 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
 
 class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
 
-    def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', max_steps: int = 200,
-                 candidates_size: int = 75, verbose: bool = False, approximate_predictions: bool = True,
+    def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', max_steps: int = 300,
+                 candidates_size: int = 64, verbose: bool = False, approximate_predictions: bool = True,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
         CFTGNNExplainer.__init__(self, tgnn_wrapper=tgnn_wrapper, sampling_strategy=sampling_strategy,
                                  candidates_size=candidates_size, verbose=verbose, max_steps=max_steps,

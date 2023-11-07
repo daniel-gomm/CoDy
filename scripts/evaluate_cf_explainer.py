@@ -112,7 +112,7 @@ if __name__ == '__main__':
                         help='Provide if a the pretrained sampler should predict a delta for each sample separately')
     parser.add_argument('--sample_size', type=int, default=10,
                         help='Number of samples to draw in each sampling step')
-    parser.add_argument('--candidates_size', type=int, default=50,
+    parser.add_argument('--candidates_size', type=int, default=64,
                         help='Number of candidates from which the samples are selected')
     parser.add_argument('--number_of_explained_events', type=int, default=1000,
                         help='Number of event ids to explain. Only has an effect if the explained_ids file has not '
