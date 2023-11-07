@@ -136,7 +136,7 @@ if __name__ == '__main__':
 
     sampler_params = None
 
-    if args.sampler == 'pretrained' or args.sampler == 'all':
+    if args.sampler == 'pretrained':
         if args.dynamic:
             embedding = DynamicEmbedding(dataset, tgn_wrapper, embed_static_node_features=False)
         else:
