@@ -486,7 +486,7 @@ class TGNNExplainer(Explainer):
         timings['total_duration'] = end_time - start_time
         statistics['oracle_calls'] = self.mcts_state_map.oracle_calls
         statistics['candidate_size'] = len(candidate_events)
-        statistics['candidates'] = candidate_events
+        statistics['candidates'] = np.array(candidate_events)
 
         tree_nodes.sort(key=lambda node: node.P, reverse=True)
         best_prediction = tree_nodes[0].P
@@ -536,7 +536,7 @@ class TGNNExplainer(Explainer):
         fidelity_list = best_fidelity_at_depth[indices]
         best_fidelity_list = best_fidelity_list[indices]
 
-        return sparsity_thresholds.tolist(), fidelity_list.tolist(), best_fidelity_list.tolist()
+        return sparsity_thresholds, fidelity_list, best_fidelity_list
 
     def _save_mcts_recorder(self, event_idx):
         # save records

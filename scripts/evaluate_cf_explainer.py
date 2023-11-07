@@ -24,7 +24,7 @@ logger = logging.getLogger()
 
 
 def evaluate(evaluated_explainers: List[EvaluationExplainer], explained_event_ids: np.ndarray, optimize: bool = False,
-             max_time_seconds: int = 72 * 3600):
+             max_time_seconds: int = 72 * 60):
     assert len(evaluated_explainers) > 0
     progress_bar = ProgressBar(len(explained_event_ids), prefix='Evaluating explainer')
     last_event_id = np.min(explained_event_ids) - 1
