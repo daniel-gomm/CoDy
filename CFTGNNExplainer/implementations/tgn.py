@@ -96,34 +96,44 @@ class TGNWrapper(TGNNWrapper):
             batch_data = self.dataset.get_batch_data(self.latest_event_id, event_id)
         batch_id = 0
         number_of_batches = int(np.ceil(len(batch_data.source_node_ids) / self.batch_size))
+        edge_ids_batches = None
+        if edge_ids_to_keep is not None:
+            if len(edge_ids_to_keep) == 0:
+                return
+            batches_boundaries = np.arange(self.latest_event_id,
+                                           edge_ids_to_keep[-1] + self.batch_size, self.batch_size)
+            edge_ids_batches = np.split(edge_ids_to_keep, np.searchsorted(edge_ids_to_keep, batches_boundaries))
+            edge_ids_batches = [array for array in edge_ids_batches if len(array) > 0]
+            number_of_batches = len(edge_ids_batches)
         if progress_bar is not None:
             progress_bar.reset(number_of_batches)
         with torch.no_grad():
-            for _ in range(number_of_batches):
+            for batch_index in range(number_of_batches):
                 if progress_bar is not None:
                     progress_bar.next()
-                batch_start = batch_id * self.batch_size
-                batch_end = min((batch_id + 1) * self.batch_size, len(batch_data.source_node_ids))
-                batch_id += 1
+                if edge_ids_batches is not None:
+                    # Only process the edge ids in these batches
+                    edge_idxs = edge_ids_batches[batch_index]
+                    source_nodes, destination_nodes, edge_times, _ = self.extract_event_information(edge_idxs)
+                    self.model.compute_temporal_embeddings(source_nodes=source_nodes,
+                                                           destination_nodes=destination_nodes,
+                                                           edge_times=edge_times,
+                                                           edge_idxs=edge_idxs,
+                                                           negative_nodes=None)
+                else:
+                    batch_start = batch_id * self.batch_size
+                    batch_end = min((batch_id + 1) * self.batch_size, len(batch_data.source_node_ids))
+                    batch_id += 1
 
-                source_nodes = batch_data.source_node_ids[batch_start:batch_end]
-                destination_nodes = batch_data.target_node_ids[batch_start:batch_end]
-                edge_times = batch_data.timestamps[batch_start:batch_end]
-                edge_idxs = batch_data.edge_ids[batch_start:batch_end]
-                if edge_ids_to_keep is not None:
-                    # Mask out all events that are not in the provided list
-                    edge_mask = np.isin(edge_idxs, edge_ids_to_keep)
-                    source_nodes = source_nodes[edge_mask]
-                    destination_nodes = destination_nodes[edge_mask]
-                    edge_times = edge_times[edge_mask]
-                    edge_idxs = edge_idxs[edge_mask]
-                    if len(edge_idxs) == 0:
-                        continue
-                self.model.compute_temporal_embeddings(source_nodes=source_nodes,
-                                                       destination_nodes=destination_nodes,
-                                                       edge_times=edge_times,
-                                                       edge_idxs=edge_idxs,
-                                                       negative_nodes=None)
+                    source_nodes = batch_data.source_node_ids[batch_start:batch_end]
+                    destination_nodes = batch_data.target_node_ids[batch_start:batch_end]
+                    edge_times = batch_data.timestamps[batch_start:batch_end]
+                    edge_idxs = batch_data.edge_ids[batch_start:batch_end]
+                    self.model.compute_temporal_embeddings(source_nodes=source_nodes,
+                                                           destination_nodes=destination_nodes,
+                                                           edge_times=edge_times,
+                                                           edge_idxs=edge_idxs,
+                                                           negative_nodes=None)
                 self.model.memory.detach_memory()
 
         self.latest_event_id = event_id
@@ -159,7 +169,8 @@ class TGNWrapper(TGNNWrapper):
                                                            uniform=False))
         if edge_ids_to_keep is None:
             edge_ids_to_keep = self.dataset.edge_ids[~np.isin(self.dataset.edge_ids, edges_to_drop)]
-            edge_ids_to_keep = edge_ids_to_keep[edge_ids_to_keep < event_id]
+            edge_ids_to_keep = edge_ids_to_keep[edge_ids_to_keep > self.latest_event_id]
+        edge_ids_to_keep = edge_ids_to_keep[edge_ids_to_keep < event_id]
         # Rollout the events from the subgraph
         self.rollout_until_event(event_id=event_id, edge_ids_to_keep=edge_ids_to_keep)
 
