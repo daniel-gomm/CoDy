@@ -65,9 +65,9 @@ def evaluate(evaluated_explainers: List[EvaluationExplainer], explained_event_id
             tgnn.restore_memory(memory_backup, restore_event_id)
             tgnn.memory_backups_map[EXPLAINED_EVENT_MEMORY_LABEL] = (memory_backup, restore_event_id)
             original_prediction = base_explainer.get_evaluation_original_prediction(event_id, last_event_id)
-            tgnn.reset_model()
         else:
             original_prediction = None
+        tgnn.reset_model()
         progress_bar.update_postfix(f'Generating explanation for event {event_id}')
         for selected_explainer in evaluated_explainers:
             explanation = selected_explainer.evaluate_explanation(event_id, original_prediction)
@@ -124,8 +124,8 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true',
                         help='Add this flag for more detailed debug outputs')
     parser.add_argument('--optimize', action='store_true',
-                        help='Add this flag to optimize evaluation performance at the cost of a bit of accuracy '
-                             '(activate for debugging only)')
+                        help='Add this flag to optimize evaluation performance by pre computing memory resume '
+                             'checkpoints')
     parser.add_argument('-r', '--results', required=True, type=str,
                         help='Filepath for the evaluation results')
     parser.add_argument('--explainer', required=True, type=str, help='Which explainer to evaluate',
