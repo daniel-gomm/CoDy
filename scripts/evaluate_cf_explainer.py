@@ -31,6 +31,7 @@ def evaluate(evaluated_explainers: List[EvaluationExplainer], explained_event_id
     last_event_id = np.min(explained_event_ids) - 1
     start_time = time.time()
     base_explainer = explainers[0]
+    tgnn = base_explainer.tgnn
     memory_backups = {}
 
     if optimize:
@@ -44,10 +45,14 @@ def evaluate(evaluated_explainers: List[EvaluationExplainer], explained_event_id
             rollout_event_ids[event_id] = rollout_event_id
         base_explainer.tgnn.reset_model()
         for rollout_event_id in sorted(set(rollout_event_ids.values())):
-            base_explainer.tgnn.rollout_until_event(rollout_event_id)
+            last_batch_end_id = int(np.floor(rollout_event_id / tgnn.batch_size) * tgnn.batch_size)
+            tgnn.rollout_until_event(last_batch_end_id)
+            last_batch_end_memory = tgnn.get_memory()
+            tgnn.rollout_until_event(rollout_event_id)
             memory_backup = base_explainer.tgnn.get_memory()
             for event_id in [key for key, value in rollout_event_ids.items() if value == rollout_event_id]:
                 memory_backups[event_id] = (rollout_event_id, memory_backup)
+            tgnn.restore_memory(last_batch_end_memory, last_batch_end_id)
 
     for event_id in explained_event_ids:
         progress_bar.update_postfix(f'Generating original score for event {event_id}')
@@ -55,12 +60,12 @@ def evaluate(evaluated_explainers: List[EvaluationExplainer], explained_event_id
             logger.info("Time limit reached. Finishing evaluation...")
             break
         if optimize:
-            base_explainer.tgnn.reset_model()
+            tgnn.reset_model()
             restore_event_id, memory_backup = memory_backups[event_id]
-            base_explainer.tgnn.restore_memory(memory_backup, restore_event_id)
-            base_explainer.tgnn.memory_backups_map[EXPLAINED_EVENT_MEMORY_LABEL] = (memory_backup, restore_event_id)
+            tgnn.restore_memory(memory_backup, restore_event_id)
+            tgnn.memory_backups_map[EXPLAINED_EVENT_MEMORY_LABEL] = (memory_backup, restore_event_id)
             original_prediction = base_explainer.get_evaluation_original_prediction(event_id, last_event_id)
-            base_explainer.tgnn.reset_model()
+            tgnn.reset_model()
         else:
             original_prediction = None
         progress_bar.update_postfix(f'Generating explanation for event {event_id}')
