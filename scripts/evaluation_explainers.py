@@ -158,7 +158,8 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
                                                                              memory_label=EXPLAINED_EVENT_MEMORY_LABEL,
                                                                              explained_event_id=explained_event_id,
                                                                              candidate_event_id=child_id,
-                                                                             sampled_edge_ids=sampler.subgraph[COL_ID])
+                                                                             sampled_edge_ids=
+                                                                             sampler.subgraph[COL_ID].to_numpy())
                 oracle_call_time += oc_duration
                 cache_saved_oracle_call_time += saved_time
                 oracle_calls += 1
