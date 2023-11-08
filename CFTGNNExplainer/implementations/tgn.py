@@ -102,7 +102,8 @@ class TGNWrapper(TGNNWrapper):
                 return
             batches_boundaries = np.arange(self.latest_event_id,
                                            edge_ids_to_keep[-1] + self.batch_size, self.batch_size)
-            edge_ids_batches = np.split(edge_ids_to_keep, np.searchsorted(edge_ids_to_keep, batches_boundaries))
+            edge_ids_batches = np.split(np.sort(edge_ids_to_keep), np.searchsorted(edge_ids_to_keep,
+                                                                                   batches_boundaries))
             edge_ids_batches = [array for array in edge_ids_batches if len(array) > 0]
             number_of_batches = len(edge_ids_batches)
         if progress_bar is not None:

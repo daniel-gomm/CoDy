@@ -74,6 +74,10 @@ def evaluate(evaluated_explainers: List[EvaluationExplainer], explained_event_id
             selected_explainer.explanation_results_list.append(explanation)
             # Set the original prediction in the first iteration so that it does not have to be calculated again
             original_prediction = explanation.original_prediction
+            if optimize:
+                restore_event_id, memory_backup = memory_backups[event_id]
+                tgnn.memory_backups_map[EXPLAINED_EVENT_MEMORY_LABEL] = (memory_backup, restore_event_id)
+                tgnn.reset_model()
         scripts.evaluation_explainers.EVALUATION_STATE_CACHE = {}  # Reset the state cache
         last_event_id = event_id - 1
         progress_bar.next()
