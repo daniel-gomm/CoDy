@@ -244,14 +244,14 @@ class Explainer:
         self.tgnn.initialize(np.min(candidate_events) - 1, show_progress=False,
                              memory_label=memory_label)
         full_cf_example_events = np.array(cf_example_events + [candidate_event_id])
-        edges_to_keep = None
+        event_ids_to_rollout = None
         if self.approximate_predictions:
-            edges_to_keep = candidate_events[~np.isin(candidate_events, full_cf_example_events)]
+            event_ids_to_rollout = candidate_events[~np.isin(candidate_events, full_cf_example_events)]
 
         subgraph_pred, _ = self.tgnn.compute_edge_probabilities_for_subgraph(explained_event_id,
                                                                              full_cf_example_events,
                                                                              result_as_logit=True,
-                                                                             edge_ids_to_keep=edges_to_keep)
+                                                                             event_ids_to_rollout=event_ids_to_rollout)
         if original_prediction * subgraph_pred < 0 and self.approximate_predictions:
             # Approximated prediction is counterfactual -> Get the true score
             self.tgnn.initialize(np.min(candidate_events) - 1, show_progress=False,
@@ -259,7 +259,7 @@ class Explainer:
             subgraph_pred, _ = self.tgnn.compute_edge_probabilities_for_subgraph(explained_event_id,
                                                                                  full_cf_example_events,
                                                                                  result_as_logit=True,
-                                                                                 edge_ids_to_keep=None)
+                                                                                 event_ids_to_rollout=None)
         subgraph_pred = subgraph_pred.detach().cpu().item()
         return subgraph_pred
 
