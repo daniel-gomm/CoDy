@@ -40,7 +40,7 @@ class NumpyArrayEncoder(json.JSONEncoder):
 
 def extract_training_data(explainer: EvaluationExplainer, emb: Embedding, epoch_event_ids: List[int], depth: int = 2):
     res = []
-    last_min_event_id = 0
+    last_min_event_id = -1
     progress_bar = ProgressBar(max_item=len(epoch_event_ids), prefix='Collecting data for training')
     for index, event_id in enumerate(sorted(epoch_event_ids)):
         sampler = explainer.initialize_explanation_evaluation(event_id, original_prediction=0.0)

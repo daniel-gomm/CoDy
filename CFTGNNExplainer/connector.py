@@ -31,7 +31,7 @@ class TGNNWrapper:
         raise NotImplementedError
 
     def rollout_until_event(self, event_id: int = None, batch_data: BatchData = None,
-                            progress_bar: ProgressBar = None) -> None:
+                            progress_bar: ProgressBar = None, event_ids_to_rollout: np.ndarray = None) -> None:
         raise NotImplementedError
 
     def compute_embeddings(self, source_nodes, target_nodes, edge_times, edge_ids, negative_nodes=None):
@@ -48,7 +48,7 @@ class TGNNWrapper:
 
     def compute_edge_probabilities_for_subgraph(self, event_id, edges_to_drop: np.ndarray,
                                                 result_as_logit: bool = False,
-                                                edge_ids_to_keep: np.ndarray = None) -> (torch.Tensor, torch.Tensor):
+                                                event_ids_to_rollout: np.ndarray = None) -> (torch.Tensor, torch.Tensor):
         raise NotImplementedError
 
     def get_memory(self):

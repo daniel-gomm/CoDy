@@ -28,10 +28,10 @@ def evaluate(evaluated_explainers: List[EvaluationExplainer], explained_event_id
              max_time_seconds: int = 72 * 60):
     assert len(evaluated_explainers) > 0
     progress_bar = ProgressBar(len(explained_event_ids), prefix='Evaluating explainer')
-    last_event_id = np.min(explained_event_ids) - 1
     start_time = time.time()
     base_explainer = explainers[0]
     tgnn = base_explainer.tgnn
+    tgnn.set_evaluation_mode(True)
     memory_backups = {}
 
     if optimize:
@@ -45,7 +45,7 @@ def evaluate(evaluated_explainers: List[EvaluationExplainer], explained_event_id
             rollout_event_ids[event_id] = rollout_event_id
         base_explainer.tgnn.reset_model()
         for rollout_event_id in sorted(set(rollout_event_ids.values())):
-            last_batch_end_id = int(np.floor(rollout_event_id / tgnn.batch_size) * tgnn.batch_size)
+            last_batch_end_id = int(np.floor(rollout_event_id / tgnn.batch_size) * tgnn.batch_size) - 1
             tgnn.rollout_until_event(last_batch_end_id)
             last_batch_end_memory = tgnn.get_memory()
             tgnn.rollout_until_event(rollout_event_id)
@@ -62,9 +62,9 @@ def evaluate(evaluated_explainers: List[EvaluationExplainer], explained_event_id
         if optimize:
             tgnn.reset_model()
             restore_event_id, memory_backup = memory_backups[event_id]
-            tgnn.restore_memory(memory_backup, restore_event_id)
+            # tgnn.restore_memory(memory_backup, restore_event_id)
             tgnn.memory_backups_map[EXPLAINED_EVENT_MEMORY_LABEL] = (memory_backup, restore_event_id)
-            original_prediction = base_explainer.get_evaluation_original_prediction(event_id, last_event_id)
+            original_prediction = base_explainer.calculate_original_score(event_id, restore_event_id)
         else:
             original_prediction = None
         tgnn.reset_model()
@@ -79,7 +79,6 @@ def evaluate(evaluated_explainers: List[EvaluationExplainer], explained_event_id
                 tgnn.memory_backups_map[EXPLAINED_EVENT_MEMORY_LABEL] = (memory_backup, restore_event_id)
                 tgnn.reset_model()
         scripts.evaluation_explainers.EVALUATION_STATE_CACHE = {}  # Reset the state cache
-        last_event_id = event_id - 1
         progress_bar.next()
     progress_bar.close()
 

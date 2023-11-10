@@ -90,20 +90,21 @@ class TGNWrapper(TGNNWrapper):
         self.model.detach_memory()
 
     def rollout_until_event(self, event_id: int = None, batch_data: BatchData = None,
-                            progress_bar: ProgressBar = None, edge_ids_to_keep: np.ndarray = None) -> None:
+                            progress_bar: ProgressBar = None, event_ids_to_rollout: np.ndarray = None) -> None:
         assert event_id is not None or batch_data is not None
+        event_id += 1  # One more than the event id, since the event id sets the end index
         if batch_data is None:
             batch_data = self.dataset.get_batch_data(self.latest_event_id, event_id)
         batch_id = 0
         number_of_batches = int(np.ceil(len(batch_data.source_node_ids) / self.batch_size))
         edge_ids_batches = None
-        if edge_ids_to_keep is not None:
-            if len(edge_ids_to_keep) == 0:
+        if event_ids_to_rollout is not None:
+            if len(event_ids_to_rollout) == 0:
                 return
+            event_ids_to_rollout = np.sort(event_ids_to_rollout)
             batches_boundaries = np.arange(self.latest_event_id,
-                                           edge_ids_to_keep[-1] + self.batch_size, self.batch_size)
-            edge_ids_batches = np.split(np.sort(edge_ids_to_keep), np.searchsorted(edge_ids_to_keep,
-                                                                                   batches_boundaries))
+                                           event_ids_to_rollout[-1] + self.batch_size, self.batch_size)
+            edge_ids_batches = np.split(event_ids_to_rollout, np.searchsorted(event_ids_to_rollout, batches_boundaries))
             edge_ids_batches = [array for array in edge_ids_batches if len(array) > 0]
             number_of_batches = len(edge_ids_batches)
         if progress_bar is not None:
@@ -161,19 +162,20 @@ class TGNWrapper(TGNNWrapper):
 
     def compute_edge_probabilities_for_subgraph(self, event_id, edges_to_drop: np.ndarray,
                                                 result_as_logit: bool = False,
-                                                edge_ids_to_keep: np.ndarray = None) -> (torch.Tensor, torch.Tensor):
+                                                event_ids_to_rollout: np.ndarray = None) -> (
+    torch.Tensor, torch.Tensor):
         if not self.evaluation_mode:
             self.logger.info('Model not in evaluation mode. Do not use predictions for evaluation purposes!')
         # Insert a new neighborhood finder so that the model does not consider dropped edges
         original_ngh_finder = self.model.neighbor_finder
         self.model.set_neighbor_finder(get_neighbor_finder(to_data_object(self.dataset, edges_to_drop=edges_to_drop),
                                                            uniform=False))
-        if edge_ids_to_keep is None:
-            edge_ids_to_keep = self.dataset.edge_ids[~np.isin(self.dataset.edge_ids, edges_to_drop)]
-            edge_ids_to_keep = edge_ids_to_keep[edge_ids_to_keep > self.latest_event_id]
-        edge_ids_to_keep = edge_ids_to_keep[edge_ids_to_keep < event_id]
+        if event_ids_to_rollout is None:
+            event_ids_to_rollout = self.dataset.edge_ids[~np.isin(self.dataset.edge_ids, edges_to_drop)]
+            event_ids_to_rollout = event_ids_to_rollout[event_ids_to_rollout > self.latest_event_id]
+        event_ids_to_rollout = event_ids_to_rollout[event_ids_to_rollout < event_id]
         # Rollout the events from the subgraph
-        self.rollout_until_event(event_id=event_id, edge_ids_to_keep=edge_ids_to_keep)
+        self.rollout_until_event(event_id=event_id, event_ids_to_rollout=event_ids_to_rollout)
 
         source_node, target_node, timestamp, edge_id = self.extract_event_information(event_ids=event_id)
         probabilities = self.compute_edge_probabilities(source_node, target_node, timestamp, edge_id,
@@ -191,7 +193,7 @@ class TGNWrapper(TGNNWrapper):
     def restore_memory(self, memory_backup, event_id):
         self.reset_model()
         self.model.memory.restore_memory(memory_backup)
-        self.reset_latest_event_id(event_id)
+        self.reset_latest_event_id(event_id + 1)
 
     def reset_model(self):
         self.reset_latest_event_id()

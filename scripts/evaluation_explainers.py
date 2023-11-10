@@ -15,9 +15,6 @@ from CFTGNNExplainer.explainer.searching import (BatchSearchTreeNode, select_bes
 from CFTGNNExplainer.explainer.mcts import CFTGNNExplainer, MCTSTreeNode
 from CFTGNNExplainer.explainer.mcts import find_best_non_counterfactual_example as find_best_non_cf_example
 
-LAST_PREDICTION_MEMORY_LABEL = 'last_original_score'
-NEW_PREDICTION_MEMORY_LABEL = 'new_original_score'
-
 EVALUATION_STATE_CACHE = {}
 
 
@@ -56,23 +53,6 @@ class EvaluationExplainer(Explainer):
         super().__init__(tgnn_wrapper, sampling_strategy, candidates_size, sample_size, verbose,
                          approximate_predictions, pretrained_sampler_parameters)
         self.explanation_results_list = []
-
-    def get_evaluation_original_prediction(self, explained_event_id: int, last_event_id: int) -> float:
-        """
-        Optimize the calculation of the original prediction by resuming from last event id so that no complete rollout
-        is necessary
-        @param explained_event_id: Event ID for the event that is explained
-        @param last_event_id: Event ID of the last event on which this function has been called
-        @return: The original prediction for the explained event id
-        """
-        self.tgnn.set_evaluation_mode(True)
-        self.tgnn.initialize(last_event_id, memory_label=LAST_PREDICTION_MEMORY_LABEL)
-        self.tgnn.initialize(explained_event_id - 1, memory_label=NEW_PREDICTION_MEMORY_LABEL)
-        original_prediction, _ = self.tgnn.predict(explained_event_id, result_as_logit=True)
-        self.tgnn.memory_backups_map[LAST_PREDICTION_MEMORY_LABEL] = (
-            self.tgnn.memory_backups_map)[NEW_PREDICTION_MEMORY_LABEL]
-        del self.tgnn.memory_backups_map[NEW_PREDICTION_MEMORY_LABEL]
-        return original_prediction.detach().cpu().item()
 
     def initialize_explanation_evaluation(self, explained_event_id: int, original_prediction: float) -> EdgeSampler:
         subgraph = self.subgraph_generator.get_fixed_size_k_hop_temporal_subgraph(num_hops=self.num_hops,
@@ -379,7 +359,7 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
                                      candidates_size=candidates_size, sample_size=candidates_size, verbose=verbose,
                                      approximate_predictions=approximate_predictions,
                                      pretrained_sampler_parameters=pretrained_sampler_parameters)
-        self.last_min_id = 0
+        self.last_min_id = -1
 
     def _get_evaluation_subgraph_prediction(self, candidate_events: np.ndarray, node_to_expand: MCTSTreeNode,
                                             explained_event_id: int,
