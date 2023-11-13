@@ -102,10 +102,6 @@ class MCTSTreeNode(TreeNode):
         """
         self.number_of_selections += 1
         if not self.is_leaf():
-            # Here the exploitation score could be updates. However, this seems to make the search performance worse
-
-            # self.exploitation_score = max([self.exploitation_score] +
-            #                              [child.exploitation_score for child in self.children if child.expanded])
             if len(self.children) > 0:
                 self.exploitation_score = max(0.0,
                                               (calculate_prediction_delta(self.original_prediction, self.prediction) /
