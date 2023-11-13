@@ -65,9 +65,9 @@ class TreeNode:
         Recursively check if the node is already maximally expanded, meaning that no further expansions of its child
         nodes are possible
         """
-        if not self.max_expansion_reached:
+        if not self.max_expansion_reached and self.expanded:
             for child in self.children:
-                if not child.max_expansion_reached or child.expanded:
+                if not child.max_expansion_reached:
                     return
             self.max_expansion_reached = True
             if self.parent is not None:
@@ -94,8 +94,10 @@ class TreeNode:
         if self.original_prediction * self.prediction < 0:
             self.is_counterfactual = True
             self.max_expansion_reached = True
+            self.parent._check_max_expanded()
         if len(self.children) == 0:
             self.max_expansion_reached = True
+            self.parent._check_max_expanded()
         self.expansion_backpropagation()
 
     def select_next_leaf(self, max_depth: int) -> TreeNode:
