@@ -94,10 +94,12 @@ class TreeNode:
         if self.original_prediction * self.prediction < 0:
             self.is_counterfactual = True
             self.max_expansion_reached = True
-            self.parent._check_max_expanded()
+            if self.parent is not None:
+                self.parent._check_max_expanded()
         if len(self.children) == 0:
             self.max_expansion_reached = True
-            self.parent._check_max_expanded()
+            if self.parent is not None:
+                self.parent._check_max_expanded()
         self.expansion_backpropagation()
 
     def select_next_leaf(self, max_depth: int) -> TreeNode:
