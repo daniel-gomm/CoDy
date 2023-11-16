@@ -167,7 +167,7 @@ class TPGExplainer(Explainer):
             progress_bar = ProgressBar(max_item=len(train_event_ids), prefix=f'Epoch {epoch}: Explaining events')
             for index, event_id in enumerate(sorted(train_event_ids)):
                 progress_bar.next()
-                subgraph = k_hop_temporal_subgraph(self.tgnn.dataset.events, self.num_hops, explained_event_id)
+                subgraph = k_hop_temporal_subgraph(self.tgnn.dataset.events, self.num_hops, event_id)
                 self.tgnn.initialize(event_id, subgraph_event_ids=subgraph[COL_ID].to_numpy())
                 candidate_events = self.tgnn.get_candidate_events(event_id)
                 if len(candidate_events) == 0:
