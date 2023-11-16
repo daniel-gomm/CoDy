@@ -156,9 +156,10 @@ class CFTGNNExplainer(Explainer):
         for rank, edge_id in enumerate(ranked_edge_ids):
             new_child = MCTSTreeNode(edge_id, node_to_expand, node_to_expand.original_prediction, rank)
             children.append(new_child)
+        node_to_expand.expand(prediction, children)
+        for new_child in children:
             if new_child.hash() in self.known_states.keys():
                 self._expand_node(explained_edge_id, new_child, self.known_states[new_child.hash()], sampler)
-        node_to_expand.expand(prediction, children)
 
     def explain(self, explained_event_id: int) -> CounterFactualExample:
         """
