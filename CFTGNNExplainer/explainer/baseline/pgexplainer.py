@@ -7,6 +7,8 @@ import time
 from CFTGNNExplainer.embedding import Embedding
 from CFTGNNExplainer.implementations.ttgn import TTGNWrapper
 from CFTGNNExplainer.explainer.base import Explainer
+from CFTGNNExplainer.explainer.baseline.common import greedy_highest_value_over_array, k_hop_temporal_subgraph
+from CFTGNNExplainer.constants import COL_ID
 
 import torch.nn as nn
 import torch.optim
@@ -18,16 +20,6 @@ def fidelity(original_prediction, important_prediction):
     if original_prediction >= 0:  # logit
         return important_prediction - original_prediction
     return original_prediction - important_prediction
-
-
-def greedy_highest_value_over_array(values):
-    best_values = [values[0], ]
-    best = values[0]
-    for i in range(1, len(values)):
-        if best < values[i]:
-            best = values[i]
-        best_values.append(best)
-    return np.array(best_values)
 
 
 @dataclass
@@ -85,8 +77,10 @@ class TPGExplainer(Explainer):
     def explain(self, explained_event_id: int) -> FactualExplanation:
         start_time = time.time_ns()
         self.tgnn.reset_model()
+        self.tgnn.set_evaluation_mode(True)
         self.explainer.eval()
-        self.tgnn.initialize(explained_event_id)
+        subgraph = k_hop_temporal_subgraph(self.tgnn.dataset.events, self.num_hops, explained_event_id)
+        self.tgnn.initialize(explained_event_id, subgraph_event_ids=subgraph[COL_ID].to_numpy())
         init_end_time = time.time_ns()
         with torch.no_grad():
             candidate_events = self.tgnn.get_candidate_events(explained_event_id)
@@ -173,7 +167,8 @@ class TPGExplainer(Explainer):
             progress_bar = ProgressBar(max_item=len(train_event_ids), prefix=f'Epoch {epoch}: Explaining events')
             for index, event_id in enumerate(sorted(train_event_ids)):
                 progress_bar.next()
-                self.tgnn.initialize(event_id)
+                subgraph = k_hop_temporal_subgraph(self.tgnn.dataset.events, self.num_hops, explained_event_id)
+                self.tgnn.initialize(event_id, subgraph_event_ids=subgraph[COL_ID].to_numpy())
                 candidate_events = self.tgnn.get_candidate_events(event_id)
                 if len(candidate_events) == 0:
                     skipped_events += 1
