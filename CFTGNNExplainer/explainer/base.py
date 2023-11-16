@@ -65,11 +65,12 @@ class TreeNode:
         Recursively check if the node is already maximally expanded, meaning that no further expansions of its child
         nodes are possible
         """
-        if not self.max_expansion_reached and self.expanded:
-            for child in self.children:
-                if not child.max_expansion_reached:
-                    return
-            self.max_expansion_reached = True
+        if self.expanded:
+            if not self.max_expansion_reached:
+                for child in self.children:
+                    if not child.max_expansion_reached:
+                        return
+                self.max_expansion_reached = True
             if self.parent is not None:
                 self.parent._check_max_expanded()
 
