@@ -177,7 +177,14 @@ class TTGNWrapper(TGNNWrapper):
         if event_id in candidate_events:
             candidate_events.remove(event_id)
 
-        original_score, _ = self.predict(event_id, edge_id_preserve_list=(candidate_events + base_events))
+        original_score, _ = self.model.compute_edge_probabilities(source_nodes=source_nodes,
+                                                                  destination_nodes=target_nodes,
+                                                                  negative_nodes=None,
+                                                                  edge_times=timestamps,
+                                                                  edge_idxs=event_ids,
+                                                                  perform_memory_update=False,
+                                                                  edge_idx_preserve_list=base_events + candidate_events,
+                                                                  result_as_logit=True)
         return candidate_events, unique_edge_ids, base_events, original_score
 
     def compute_edge_probabilities(self, source_nodes: np.ndarray, target_nodes: np.ndarray,
