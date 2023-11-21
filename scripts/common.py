@@ -8,9 +8,9 @@ import numpy as np
 import pandas as pd
 import torch
 
-from CFTGNNExplainer.implementations.tgn import TGNWrapper, to_data_object
-from CFTGNNExplainer.implementations.ttgn import TTGNWrapper
-from CFTGNNExplainer.data import ContinuousTimeDynamicGraphDataset, TrainTestDatasetParameters
+from cody.implementations.tgn import TGNWrapper, to_data_object
+from cody.implementations.ttgn import TTGNWrapper
+from cody.data import ContinuousTimeDynamicGraphDataset, TrainTestDatasetParameters
 from TGN.model.tgn import TGN
 from TGN.utils.utils import get_neighbor_finder
 

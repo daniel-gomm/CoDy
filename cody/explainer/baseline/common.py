@@ -1,5 +1,5 @@
 import numpy as np
-from CFTGNNExplainer.constants import COL_ID, COL_NODE_U, COL_NODE_I
+from cody.constants import COL_ID, COL_NODE_U, COL_NODE_I
 
 def k_hop_temporal_subgraph(df, num_hops, event_idx):
     """

@@ -11,16 +11,16 @@ from typing import List, Dict
 
 from sklearn.metrics import ndcg_score
 
-from CFTGNNExplainer.sampler import create_embedding_model
+from cody.sampler import create_embedding_model
 from common import (create_dataset_from_args, create_tgn_wrapper_from_args, add_dataset_arguments,
                     add_wrapper_model_arguments, parse_args)
 
-from CFTGNNExplainer.constants import EXPLAINED_EVENT_MEMORY_LABEL, CUR_IT_MIN_EVENT_MEM_LBL, COL_ID
-from CFTGNNExplainer.data import TrainTestDatasetParameters
+from cody.constants import EXPLAINED_EVENT_MEMORY_LABEL, CUR_IT_MIN_EVENT_MEM_LBL, COL_ID
+from cody.data import TrainTestDatasetParameters
 from scripts.evaluation_explainers import EvaluationExplainer
-from CFTGNNExplainer.explainer.base import calculate_prediction_delta
-from CFTGNNExplainer.embedding import Embedding, DynamicEmbedding, StaticEmbedding
-from CFTGNNExplainer.utils import ProgressBar
+from cody.explainer.base import calculate_prediction_delta
+from cody.embedding import Embedding, DynamicEmbedding, StaticEmbedding
+from cody.utils import ProgressBar
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
@@ -296,7 +296,7 @@ if __name__ == '__main__':
 
     tgn_wrapper = create_tgn_wrapper_from_args(args, dataset)
 
-    eval_explainer = EvaluationExplainer(tgn_wrapper, sampling_strategy='random',
+    eval_explainer = EvaluationExplainer(tgn_wrapper, selection_strategy='random',
                                          candidates_size=args.candidates_size, sample_size=args.sample_size,
                                          verbose=False)
 

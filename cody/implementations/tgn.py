@@ -7,10 +7,10 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from CFTGNNExplainer.connector import TGNNWrapper
-from CFTGNNExplainer.constants import COL_TIMESTAMP, COL_NODE_I, COL_NODE_U
-from CFTGNNExplainer.data import BatchData, ContinuousTimeDynamicGraphDataset
-from CFTGNNExplainer.utils import ProgressBar, construct_model_path
+from cody.connector import TGNNWrapper
+from cody.constants import COL_TIMESTAMP, COL_NODE_I, COL_NODE_U
+from cody.data import BatchData, ContinuousTimeDynamicGraphDataset
+from cody.utils import ProgressBar, construct_model_path
 from TGN.evaluation.evaluation import eval_edge_prediction
 from TGN.model.tgn import TGN
 from TGN.utils.data_processing import compute_time_statistics, Data

@@ -19,9 +19,9 @@ def _is_running_in_notebook() -> bool:
         elif shell == 'TerminalInteractiveShell':
             return False  # Terminal running IPython
         else:
-            return False  # Other type (?)
+            return False
     except NameError:
-        return False  # Probably standard Python interpreter
+        return False
 
 
 class ProgressBar:

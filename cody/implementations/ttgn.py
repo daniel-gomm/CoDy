@@ -3,12 +3,12 @@ import itertools
 import numpy as np
 import torch
 
-from CFTGNNExplainer.utils import ProgressBar
+from cody.utils import ProgressBar
 from TTGN.model.tgn import TGN
 
-from CFTGNNExplainer.connector import TGNNWrapper
-from CFTGNNExplainer.data import ContinuousTimeDynamicGraphDataset, BatchData
-from CFTGNNExplainer.constants import COL_ID
+from cody.connector import TGNNWrapper
+from cody.data import ContinuousTimeDynamicGraphDataset, BatchData
+from cody.constants import COL_ID
 from TTGN.utils.data_processing import compute_time_statistics
 from TTGN.utils.utils import NeighborFinder
 

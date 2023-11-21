@@ -7,10 +7,10 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 
-from CFTGNNExplainer.connector import TGNNWrapper
-from CFTGNNExplainer.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
-from CFTGNNExplainer.data import SubgraphGenerator
-from CFTGNNExplainer.sampler import EdgeSampler, RandomEdgeSampler, RecentEdgeSampler, ClosestEdgeSampler, \
+from cody.connector import TGNNWrapper
+from cody.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
+from cody.data import SubgraphGenerator
+from cody.sampler import EdgeSampler, RandomEdgeSampler, RecentEdgeSampler, ClosestEdgeSampler, \
     PretrainedEdgeSampler, PretrainedEdgeSamplerParameters, OneBestEdgeSampler
 
 
@@ -163,7 +163,7 @@ def calculate_prediction_delta(original_prediction: float, prediction_to_assess:
 
 class Explainer:
 
-    def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', candidates_size: int = 75,
+    def __init__(self, tgnn_wrapper: TGNNWrapper, selection_strategy: str = 'recent', candidates_size: int = 75,
                  sample_size: int = 10, verbose: bool = False, approximate_predictions: bool = True,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
         self.tgnn = tgnn_wrapper
@@ -172,7 +172,7 @@ class Explainer:
         self.num_hops = self.tgnn.num_hops
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger()
-        self.sampling_strategy = sampling_strategy
+        self.selection_strategy = selection_strategy
         self.candidates_size = candidates_size
         self.sample_size = sample_size
         self.verbose = verbose
@@ -185,20 +185,20 @@ class Explainer:
         Create sampling according to
         @type subgraph: DataFrame The subgraph on which to create the sampling
         """
-        if self.sampling_strategy == 'random':
+        if self.selection_strategy == 'random':
             return RandomEdgeSampler(subgraph)
-        elif self.sampling_strategy == 'recent':
+        elif self.selection_strategy == 'recent':
             return RecentEdgeSampler(subgraph)
-        elif self.sampling_strategy == 'closest':
+        elif self.selection_strategy == 'closest':
             return ClosestEdgeSampler(subgraph)
-        elif self.sampling_strategy == 'pretrained':
+        elif self.selection_strategy == 'pretrained':
             assert self.pretrained_sampler_parameters is not None
             return PretrainedEdgeSampler(subgraph, self.pretrained_sampler_parameters, explained_event_id,
                                          original_prediction)
-        elif self.sampling_strategy == '1-best':
+        elif self.selection_strategy == '1-best':
             return OneBestEdgeSampler(subgraph)
         else:
-            raise NotImplementedError(f'No sampling implemented for sampling strategy {self.sampling_strategy}')
+            raise NotImplementedError(f'No sampling implemented for sampling strategy {self.selection_strategy}')
 
     def calculate_original_score(self, explained_event_id: int, min_event_id: int) -> float:
         """

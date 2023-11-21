@@ -9,19 +9,19 @@ import numpy as np
 import pandas as pd
 import torch
 
-from CFTGNNExplainer.data import TrainTestDatasetParameters
-from CFTGNNExplainer.embedding import StaticEmbedding
-from CFTGNNExplainer.implementations.tgn import to_data_object
-from CFTGNNExplainer.utils import ProgressBar
+from cody.data import TrainTestDatasetParameters
+from cody.embedding import StaticEmbedding
+from cody.implementations.tgn import to_data_object
+from cody.utils import ProgressBar
 from TTGN.model.tgn import TGN
 from TTGN.utils.utils import get_neighbor_finder
 
 from common import add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args, parse_args, \
     get_event_ids_from_file, column_to_int_array, column_to_float_array
 
-from CFTGNNExplainer.implementations.ttgn import TTGNWrapper
-from CFTGNNExplainer.explainer.baseline.pgexplainer import TPGExplainer, FactualExplanation
-from CFTGNNExplainer.explainer.baseline.tgnnexplainer import TGNNExplainer, TGNNExplainerExplanation
+from cody.implementations.ttgn import TTGNWrapper
+from cody.explainer.baseline.pgexplainer import TPGExplainer, FactualExplanation
+from cody.explainer.baseline.tgnnexplainer import TGNNExplainer, TGNNExplainerExplanation
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()

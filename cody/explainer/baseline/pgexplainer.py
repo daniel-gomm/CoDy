@@ -4,16 +4,16 @@ from typing import Dict
 import numpy as np
 import time
 
-from CFTGNNExplainer.embedding import Embedding
-from CFTGNNExplainer.implementations.ttgn import TTGNWrapper
-from CFTGNNExplainer.explainer.base import Explainer
-from CFTGNNExplainer.explainer.baseline.common import greedy_highest_value_over_array, k_hop_temporal_subgraph
-from CFTGNNExplainer.constants import COL_ID
+from cody.embedding import Embedding
+from cody.implementations.ttgn import TTGNWrapper
+from cody.explainer.base import Explainer
+from cody.explainer.baseline.common import greedy_highest_value_over_array, k_hop_temporal_subgraph
+from cody.constants import COL_ID
 
 import torch.nn as nn
 import torch.optim
 
-from CFTGNNExplainer.utils import ProgressBar
+from cody.utils import ProgressBar
 
 
 def fidelity(original_prediction, important_prediction):

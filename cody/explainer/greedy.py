@@ -1,9 +1,9 @@
 import sys
 
 import numpy as np
-from CFTGNNExplainer.constants import COL_ID, EXPLAINED_EVENT_MEMORY_LABEL, CUR_IT_MIN_EVENT_MEM_LBL
-from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample, calculate_prediction_delta, TreeNode
-from CFTGNNExplainer.sampler import OneBestEdgeSampler
+from cody.constants import COL_ID, EXPLAINED_EVENT_MEMORY_LABEL, CUR_IT_MIN_EVENT_MEM_LBL
+from cody.explainer.base import Explainer, CounterFactualExample, calculate_prediction_delta, TreeNode
+from cody.sampler import OneBestEdgeSampler
 
 
 class GreedyTreeNode(TreeNode):

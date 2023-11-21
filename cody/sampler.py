@@ -4,8 +4,8 @@ from typing import List
 import torch
 import numpy as np
 import pandas as pd
-from CFTGNNExplainer.constants import COL_ID, COL_SUBGRAPH_DISTANCE, COL_TIMESTAMP
-from CFTGNNExplainer.embedding import Embedding
+from cody.constants import COL_ID, COL_SUBGRAPH_DISTANCE, COL_TIMESTAMP
+from cody.embedding import Embedding
 
 
 def create_embedding_model(emb: Embedding, model_path: str = None, device: str = 'cpu'):
