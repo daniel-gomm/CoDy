@@ -85,7 +85,7 @@ def preprocess_data(dataset_path: str, output_directory: str, bipartite: bool = 
         node_features = np.zeros((max_idx + 1, 172))
 
     assert len(edge_features) == len(dataset)
-    assert len(node_features) == dataset[COL_NODE_I].max() + 1
+    assert len(node_features) == max(dataset[COL_NODE_I].max(), dataset[COL_NODE_U].max()) + 1
 
     print(f'Dataset {dataset_name} has been processed and will be saved.\n\nDataset information:\nEdge feature shape: '
           f'{edge_features.shape}\nNode feature shape: {node_features.shape}')
