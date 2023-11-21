@@ -14,6 +14,7 @@ from CFTGNNExplainer.explainer.searching import (BatchSearchTreeNode, select_bes
                                                  find_best_non_counterfactual_example, SearchingCFExplainer)
 from CFTGNNExplainer.explainer.mcts import CFTGNNExplainer, MCTSTreeNode
 from CFTGNNExplainer.explainer.mcts import find_best_non_counterfactual_example as find_best_non_cf_example
+from CFTGNNExplainer.utils import ProgressBar
 
 EVALUATION_STATE_CACHE = {}
 
@@ -405,11 +406,12 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
 
         best_cf_example = None
         best_cf_example_step = 0
+        first_example_step = self.max_steps + 1
         step = 0
         skip_search = False
         max_depth = sys.maxsize
         root_node = MCTSTreeNode(explained_event_id, parent=None, sampling_rank=0,
-                                 original_prediction=original_prediction)
+                                 original_prediction=original_prediction, alpha=self.alpha, beta=self.beta)
         self._expand_node(explained_event_id, root_node, original_prediction, sampler)
 
         if type(sampler) is OneBestEdgeSampler:
@@ -433,7 +435,9 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
             step += 1
         init_end_time = time.time_ns()
         timings['init_duration'] = init_end_time - start_time
+        progress_bar = ProgressBar(self.max_steps)
         while step <= self.max_steps and not skip_search:
+            progress_bar.next()
             node_to_expand = None
             while node_to_expand is None:
                 node_to_expand = root_node.select_next_leaf(max_depth)
@@ -466,11 +470,15 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
             oracle_calls += 1
             if node_to_expand.is_counterfactual:
                 if best_cf_example is None or best_cf_example.depth > node_to_expand.depth:
+                    if best_cf_example is None:
+                        first_example_step = step
                     best_cf_example = node_to_expand
                     best_cf_example_step = step
                     encountered_cf_examples += 1
                 elif (best_cf_example.depth == node_to_expand.depth and
                       best_cf_example.exploitation_score < node_to_expand.exploitation_score):
+                    if best_cf_example is None:
+                        first_example_step = step
                     best_cf_example = node_to_expand
                     best_cf_example_step = step
                     encountered_cf_examples += 1
@@ -485,6 +493,7 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
         self.tgnn.remove_memory_backup(EXPLAINED_EVENT_MEMORY_LABEL)
         self.tgnn.reset_model()
         self.known_states = {}
+        progress_bar.close()
         end_time = time.time_ns()
         timings['oracle_call_duration'] = oracle_call_time
         timings['explanation_duration'] = end_time - start_time - oracle_call_time + cache_saved_oracle_call_time
@@ -493,6 +502,7 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
         statistics['candidate_size'] = len(sampler.subgraph)
         statistics['candidates'] = sampler.subgraph[COL_ID].to_numpy()
         statistics['cf_example_step'] = best_cf_example_step
+        statistics['first_example_step'] = first_example_step
         statistics['encountered_cf_examples'] = encountered_cf_examples
         cf_ex = best_cf_example.to_cf_example()
         eval_cf_example = EvaluationCounterFactualExample(explained_event_id=explained_event_id,
