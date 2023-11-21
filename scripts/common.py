@@ -35,6 +35,8 @@ def add_wrapper_model_arguments(parser: ArgumentParser):
     parser.add_argument('-m', '--model', default=None, type=str,
                         help='Path to the model checkpoint to use')
     parser.add_argument('--cuda', action='store_true', help='Use cuda for GPU utilization')
+    parser.add_argument('--update_memory_at_start', action='store_true',
+                        help='Provide if the memory should be updated at start')
 
 
 def add_model_training_arguments(parser: ArgumentParser):
@@ -93,7 +95,7 @@ def create_tgn_wrapper_from_args(args: Namespace, dataset: ContinuousTimeDynamic
         edge_features=dataset.edge_features,
         device=torch.device(device),
         use_memory=True,
-        memory_update_at_start=False,
+        memory_update_at_start=args.update_memory_at_start,
         memory_dimension=172,
         embedding_module_type='graph_attention',
         message_function='identity',
