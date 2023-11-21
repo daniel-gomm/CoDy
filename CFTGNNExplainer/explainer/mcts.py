@@ -123,12 +123,15 @@ class CFTGNNExplainer(Explainer):
 
     def __init__(self, tgnn_wrapper: TGNNWrapper, candidates_size: int = 75, sampling_strategy: str = 'recent',
                  max_steps: int = 200, verbose: bool = False, approximate_predictions: bool = True,
-                 pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
+                 pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None, alpha: float = 2.0,
+                 beta: float = 1.0):
         super().__init__(tgnn_wrapper, sampling_strategy, candidates_size=candidates_size, sample_size=candidates_size,
                          verbose=verbose, approximate_predictions=approximate_predictions,
                          pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.max_steps = max_steps
         self.known_states = {}
+        self.alpha = alpha
+        self.beta = beta
 
     def _run_node_expansion(self, explained_edge_id: int, node_to_expand: MCTSTreeNode, sampler: EdgeSampler):
         edge_ids_to_exclude = node_to_expand.get_parent_ids()
@@ -154,7 +157,8 @@ class CFTGNNExplainer(Explainer):
                                                 excluded_events=np.array(edge_ids_to_exclude))
         children = []
         for rank, edge_id in enumerate(ranked_edge_ids):
-            new_child = MCTSTreeNode(edge_id, node_to_expand, node_to_expand.original_prediction, rank)
+            new_child = MCTSTreeNode(edge_id, node_to_expand, node_to_expand.original_prediction, rank,
+                                     alpha=self.alpha, beta=self.beta)
             children.append(new_child)
         node_to_expand.expand(prediction, children)
         for new_child in children:
@@ -173,7 +177,7 @@ class CFTGNNExplainer(Explainer):
         step = 0
         max_depth = sys.maxsize
         root_node = MCTSTreeNode(explained_event_id, parent=None, sampling_rank=0,
-                                 original_prediction=original_prediction)
+                                 original_prediction=original_prediction, alpha=self.alpha, beta=self.beta)
         self._expand_node(explained_event_id, root_node, original_prediction, sampler)
 
         if type(sampler) is OneBestEdgeSampler:
