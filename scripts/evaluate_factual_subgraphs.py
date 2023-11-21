@@ -5,8 +5,8 @@ import os.path
 import numpy as np
 import pandas as pd
 
-from CFTGNNExplainer.data import TrainTestDatasetParameters
-from CFTGNNExplainer.utils import ProgressBar
+from cody.data import TrainTestDatasetParameters
+from cody.utils import ProgressBar
 from common import (add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args,
                     create_tgn_wrapper_from_args, parse_args)
 

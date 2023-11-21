@@ -9,13 +9,13 @@ import numpy as np
 import torch
 from pandas import DataFrame
 
-from CFTGNNExplainer.embedding import Embedding
-from CFTGNNExplainer.explainer.baseline.pgexplainer import TPGExplainer
-from CFTGNNExplainer.explainer.baseline.common import greedy_highest_value_over_array, k_hop_temporal_subgraph
-from CFTGNNExplainer.implementations.ttgn import TTGNWrapper
-from CFTGNNExplainer.constants import COL_TIMESTAMP, COL_NODE_U, COL_NODE_I, COL_ID
-from CFTGNNExplainer.explainer.base import Explainer
-from CFTGNNExplainer.utils import ProgressBar
+from cody.embedding import Embedding
+from cody.explainer.baseline.pgexplainer import TPGExplainer
+from cody.explainer.baseline.common import greedy_highest_value_over_array, k_hop_temporal_subgraph
+from cody.implementations.ttgn import TTGNWrapper
+from cody.constants import COL_TIMESTAMP, COL_NODE_U, COL_NODE_I, COL_ID
+from cody.explainer.base import Explainer
+from cody.utils import ProgressBar
 from TTGN.model.tgn import TGN
 
 

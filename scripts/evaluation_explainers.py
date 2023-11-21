@@ -5,16 +5,16 @@ from typing import Dict, List
 import numpy as np
 import time
 
-from CFTGNNExplainer.connector import TGNNWrapper
-from CFTGNNExplainer.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
-from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample, TreeNode
-from CFTGNNExplainer.explainer.greedy import GreedyCFExplainer, GreedyTreeNode
-from CFTGNNExplainer.sampler import EdgeSampler, PretrainedEdgeSamplerParameters, OneBestEdgeSampler
-from CFTGNNExplainer.explainer.searching import (BatchSearchTreeNode, select_best_cf_example,
-                                                 find_best_non_counterfactual_example, SearchingCFExplainer)
-from CFTGNNExplainer.explainer.mcts import CFTGNNExplainer, MCTSTreeNode
-from CFTGNNExplainer.explainer.mcts import find_best_non_counterfactual_example as find_best_non_cf_example
-from CFTGNNExplainer.utils import ProgressBar
+from cody.connector import TGNNWrapper
+from cody.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
+from cody.explainer.base import Explainer, CounterFactualExample, TreeNode
+from cody.explainer.greedy import GreedyCFExplainer, GreedyTreeNode
+from cody.sampler import EdgeSampler, PretrainedEdgeSamplerParameters, OneBestEdgeSampler
+from cody.explainer.searching import (BatchSearchTreeNode, select_best_cf_example,
+                                      find_best_non_counterfactual_example, SearchingCFExplainer)
+from cody.explainer.cody import CoDy, CoDyTreeNode
+from cody.explainer.cody import find_best_non_counterfactual_example as find_best_non_cf_example
+from cody.utils import ProgressBar
 
 EVALUATION_STATE_CACHE = {}
 
@@ -48,10 +48,10 @@ class EvaluationCounterFactualExample(CounterFactualExample):
 class EvaluationExplainer(Explainer):
     explanation_results_list: List[EvaluationCounterFactualExample]
 
-    def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', candidates_size: int = 75,
+    def __init__(self, tgnn_wrapper: TGNNWrapper, selection_strategy: str = 'recent', candidates_size: int = 75,
                  sample_size: int = 10, verbose: bool = False, approximate_predictions: bool = True,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
-        super().__init__(tgnn_wrapper, sampling_strategy, candidates_size, sample_size, verbose,
+        super().__init__(tgnn_wrapper, selection_strategy, candidates_size, sample_size, verbose,
                          approximate_predictions, pretrained_sampler_parameters)
         self.explanation_results_list = []
 
@@ -75,14 +75,14 @@ class EvaluationExplainer(Explainer):
 
 class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
 
-    def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', sample_size: int = 10,
+    def __init__(self, tgnn_wrapper: TGNNWrapper, selection_strategy: str = 'recent', sample_size: int = 10,
                  candidates_size: int = 64, verbose: bool = False, approximate_predictions: bool = True,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
-        super(GreedyCFExplainer, self).__init__(tgnn_wrapper=tgnn_wrapper, sampling_strategy=sampling_strategy,
+        super(GreedyCFExplainer, self).__init__(tgnn_wrapper=tgnn_wrapper, selection_strategy=selection_strategy,
                                                 sample_size=sample_size, candidates_size=candidates_size,
                                                 verbose=verbose, approximate_predictions=approximate_predictions,
                                                 pretrained_sampler_parameters=pretrained_sampler_parameters)
-        super(EvaluationExplainer, self).__init__(tgnn_wrapper=tgnn_wrapper, sampling_strategy=sampling_strategy,
+        super(EvaluationExplainer, self).__init__(tgnn_wrapper=tgnn_wrapper, selection_strategy=selection_strategy,
                                                   candidates_size=candidates_size, sample_size=sample_size,
                                                   verbose=verbose, approximate_predictions=approximate_predictions,
                                                   pretrained_sampler_parameters=pretrained_sampler_parameters)
@@ -225,15 +225,15 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
 
 class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
 
-    def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', max_steps: int = 100,
+    def __init__(self, tgnn_wrapper: TGNNWrapper, selection_strategy: str = 'recent', max_steps: int = 100,
                  sample_size: int = 10, candidates_size: int = 64, verbose: bool = False,
                  approximate_predictions: bool = True,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
-        SearchingCFExplainer.__init__(self, tgnn_wrapper=tgnn_wrapper, sampling_strategy=sampling_strategy,
+        SearchingCFExplainer.__init__(self, tgnn_wrapper=tgnn_wrapper, selection_strategy=selection_strategy,
                                       sample_size=sample_size, candidates_size=candidates_size, verbose=verbose,
                                       approximate_predictions=approximate_predictions,
                                       max_steps=max_steps, pretrained_sampler_parameters=pretrained_sampler_parameters)
-        EvaluationExplainer.__init__(self, tgnn_wrapper=tgnn_wrapper, sampling_strategy=sampling_strategy,
+        EvaluationExplainer.__init__(self, tgnn_wrapper=tgnn_wrapper, selection_strategy=selection_strategy,
                                      candidates_size=candidates_size, sample_size=sample_size, verbose=verbose,
                                      approximate_predictions=approximate_predictions,
                                      pretrained_sampler_parameters=pretrained_sampler_parameters)
@@ -347,22 +347,22 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
         return eval_cf_example
 
 
-class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
+class EvaluationCoDy(CoDy, EvaluationExplainer):
 
-    def __init__(self, tgnn_wrapper: TGNNWrapper, sampling_strategy: str = 'recent', max_steps: int = 300,
+    def __init__(self, tgnn_wrapper: TGNNWrapper, selection_strategy: str = 'recent', max_steps: int = 300,
                  candidates_size: int = 64, verbose: bool = False, approximate_predictions: bool = True,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
-        CFTGNNExplainer.__init__(self, tgnn_wrapper=tgnn_wrapper, sampling_strategy=sampling_strategy,
-                                 candidates_size=candidates_size, verbose=verbose, max_steps=max_steps,
-                                 approximate_predictions=approximate_predictions,
-                                 pretrained_sampler_parameters=pretrained_sampler_parameters)
-        EvaluationExplainer.__init__(self, tgnn_wrapper=tgnn_wrapper, sampling_strategy=sampling_strategy,
+        CoDy.__init__(self, tgnn_wrapper=tgnn_wrapper, selection_strategy=selection_strategy,
+                      candidates_size=candidates_size, verbose=verbose, max_steps=max_steps,
+                      approximate_predictions=approximate_predictions,
+                      pretrained_sampler_parameters=pretrained_sampler_parameters)
+        EvaluationExplainer.__init__(self, tgnn_wrapper=tgnn_wrapper, selection_strategy=selection_strategy,
                                      candidates_size=candidates_size, sample_size=candidates_size, verbose=verbose,
                                      approximate_predictions=approximate_predictions,
                                      pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.last_min_id = -1
 
-    def _get_evaluation_subgraph_prediction(self, candidate_events: np.ndarray, node_to_expand: MCTSTreeNode,
+    def _get_evaluation_subgraph_prediction(self, candidate_events: np.ndarray, node_to_expand: CoDyTreeNode,
                                             explained_event_id: int,
                                             memory_label: str = EXPLAINED_EVENT_MEMORY_LABEL) -> (float, int, int):
         full_hash = f'{explained_event_id}-{node_to_expand.hash()}'
@@ -381,7 +381,7 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
             EVALUATION_STATE_CACHE[full_hash] = PredictionResult(oracle_call_time, prediction)
             return prediction, oracle_call_time, 0
 
-    def _run_node_expansion(self, explained_edge_id: int, node_to_expand: MCTSTreeNode, sampler: EdgeSampler):
+    def _run_node_expansion(self, explained_edge_id: int, node_to_expand: CoDyTreeNode, sampler: EdgeSampler):
         prediction, oracle_call_time, cache_save_time = (
             self._get_evaluation_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID].to_numpy(),
                                                      node_to_expand=node_to_expand,
@@ -410,7 +410,7 @@ class EvaluationCFTGNNExplainer(CFTGNNExplainer, EvaluationExplainer):
         step = 0
         skip_search = False
         max_depth = sys.maxsize
-        root_node = MCTSTreeNode(explained_event_id, parent=None, sampling_rank=0,
+        root_node = CoDyTreeNode(explained_event_id, parent=None, sampling_rank=0,
                                  original_prediction=original_prediction, alpha=self.alpha, beta=self.beta)
         self._expand_node(explained_event_id, root_node, original_prediction, sampler)
 

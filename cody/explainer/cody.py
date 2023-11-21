@@ -5,13 +5,13 @@ from typing import List
 
 import numpy as np
 
-from CFTGNNExplainer.connector import TGNNWrapper
-from CFTGNNExplainer.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
-from CFTGNNExplainer.explainer.base import Explainer, CounterFactualExample, calculate_prediction_delta, TreeNode
-from CFTGNNExplainer.sampler import PretrainedEdgeSamplerParameters, EdgeSampler, OneBestEdgeSampler
+from cody.connector import TGNNWrapper
+from cody.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
+from cody.explainer.base import Explainer, CounterFactualExample, calculate_prediction_delta, TreeNode
+from cody.sampler import PretrainedEdgeSamplerParameters, EdgeSampler, OneBestEdgeSampler
 
 
-def find_best_non_counterfactual_example(root_node: MCTSTreeNode) -> MCTSTreeNode:
+def find_best_non_counterfactual_example(root_node: CoDyTreeNode) -> CoDyTreeNode:
     """
         Breadth-first search for explanation that comes closest to counterfactual example
     """
@@ -27,16 +27,16 @@ def find_best_non_counterfactual_example(root_node: MCTSTreeNode) -> MCTSTreeNod
     return best_example
 
 
-class MCTSTreeNode(TreeNode):
-    parent: MCTSTreeNode
-    children: List[MCTSTreeNode]
+class CoDyTreeNode(TreeNode):
+    parent: CoDyTreeNode
+    children: List[CoDyTreeNode]
     number_of_selections: int
     is_counterfactual: bool
     edge_id: int
     sampling_rank: int
     prediction: float | None
 
-    def __init__(self, edge_id: int, parent: MCTSTreeNode | None, original_prediction: float, sampling_rank: int,
+    def __init__(self, edge_id: int, parent: CoDyTreeNode | None, original_prediction: float, sampling_rank: int,
                  alpha: float = 2.0, beta: float = 1.0):
         super().__init__(edge_id, parent, original_prediction)
         self.sampling_rank = sampling_rank
@@ -55,7 +55,7 @@ class MCTSTreeNode(TreeNode):
         exploration_score = np.sqrt(np.log(self.parent.number_of_selections) / self.number_of_selections)
         return self.alpha * self.exploitation_score + self.beta * exploration_score
 
-    def select_next_leaf(self, max_depth: int) -> MCTSTreeNode:
+    def select_next_leaf(self, max_depth: int) -> CoDyTreeNode:
         """
         Select the next leaf node for expansion
         @param max_depth: Maximum depth at which to search for leaf nodes
@@ -119,13 +119,13 @@ class MCTSTreeNode(TreeNode):
             self.parent.expansion_backpropagation()
 
 
-class CFTGNNExplainer(Explainer):
+class CoDy(Explainer):
 
-    def __init__(self, tgnn_wrapper: TGNNWrapper, candidates_size: int = 75, sampling_strategy: str = 'recent',
+    def __init__(self, tgnn_wrapper: TGNNWrapper, candidates_size: int = 75, selection_strategy: str = 'recent',
                  max_steps: int = 200, verbose: bool = False, approximate_predictions: bool = True,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None, alpha: float = 2.0,
                  beta: float = 1.0):
-        super().__init__(tgnn_wrapper, sampling_strategy, candidates_size=candidates_size, sample_size=candidates_size,
+        super().__init__(tgnn_wrapper, selection_strategy, candidates_size=candidates_size, sample_size=candidates_size,
                          verbose=verbose, approximate_predictions=approximate_predictions,
                          pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.max_steps = max_steps
@@ -133,7 +133,7 @@ class CFTGNNExplainer(Explainer):
         self.alpha = alpha
         self.beta = beta
 
-    def _run_node_expansion(self, explained_edge_id: int, node_to_expand: MCTSTreeNode, sampler: EdgeSampler):
+    def _run_node_expansion(self, explained_edge_id: int, node_to_expand: CoDyTreeNode, sampler: EdgeSampler):
         edge_ids_to_exclude = node_to_expand.get_parent_ids()
         prediction = self.calculate_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID].to_numpy(),
                                                         cf_example_events=edge_ids_to_exclude,
@@ -144,7 +144,7 @@ class CFTGNNExplainer(Explainer):
 
         self._expand_node(explained_edge_id, node_to_expand, prediction, sampler)
 
-    def _expand_node(self, explained_edge_id: int, node_to_expand: MCTSTreeNode, prediction: float,
+    def _expand_node(self, explained_edge_id: int, node_to_expand: CoDyTreeNode, prediction: float,
                      sampler: EdgeSampler):
         self.known_states[node_to_expand.hash()] = prediction
 
@@ -157,7 +157,7 @@ class CFTGNNExplainer(Explainer):
                                                 excluded_events=np.array(edge_ids_to_exclude))
         children = []
         for rank, edge_id in enumerate(ranked_edge_ids):
-            new_child = MCTSTreeNode(edge_id, node_to_expand, node_to_expand.original_prediction, rank,
+            new_child = CoDyTreeNode(edge_id, node_to_expand, node_to_expand.original_prediction, rank,
                                      alpha=self.alpha, beta=self.beta)
             children.append(new_child)
         node_to_expand.expand(prediction, children)
@@ -176,7 +176,7 @@ class CFTGNNExplainer(Explainer):
         best_cf_example = None
         step = 0
         max_depth = sys.maxsize
-        root_node = MCTSTreeNode(explained_event_id, parent=None, sampling_rank=0,
+        root_node = CoDyTreeNode(explained_event_id, parent=None, sampling_rank=0,
                                  original_prediction=original_prediction, alpha=self.alpha, beta=self.beta)
         self._expand_node(explained_event_id, root_node, original_prediction, sampler)
 

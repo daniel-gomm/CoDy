@@ -7,18 +7,18 @@ from typing import List
 import numpy as np
 import pandas as pd
 
-from CFTGNNExplainer.constants import COL_ID, EXPLAINED_EVENT_MEMORY_LABEL
-from CFTGNNExplainer.data import TrainTestDatasetParameters
-from CFTGNNExplainer.embedding import DynamicEmbedding, StaticEmbedding
-from CFTGNNExplainer.sampler import create_embedding_model, PretrainedEdgeSamplerParameters
+from cody.constants import COL_ID, EXPLAINED_EVENT_MEMORY_LABEL
+from cody.data import TrainTestDatasetParameters
+from cody.embedding import DynamicEmbedding, StaticEmbedding
+from cody.sampler import create_embedding_model, PretrainedEdgeSamplerParameters
 from common import (add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args,
                     create_tgn_wrapper_from_args, parse_args, get_event_ids_from_file, SAMPLERS, column_to_int_array,
                     column_to_float_array)
 
 from scripts.evaluation_explainers import EvaluationExplainer, EvaluationCounterFactualExample, \
-    EvaluationGreedyCFExplainer, EvaluationSearchingCFExplainer, EvaluationCFTGNNExplainer
+    EvaluationGreedyCFExplainer, EvaluationSearchingCFExplainer, EvaluationCoDy
 import scripts.evaluation_explainers
-from CFTGNNExplainer.utils import ProgressBar
+from cody.utils import ProgressBar
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
@@ -111,9 +111,9 @@ def export_explanations(explanation_list: List[EvaluationCounterFactualExample],
 def construct_results_save_path(arguments: argparse.Namespace, eval_explainer: EvaluationExplainer):
     if arguments.wrong_predictions_only:
         return (f'{arguments.results}/results_{eval_explainer.dataset.name}_{arguments.explainer}'
-                f'_{eval_explainer.sampling_strategy}_wrong_only.csv')
+                f'_{eval_explainer.selection_strategy}_wrong_only.csv')
     return (f'{arguments.results}/results_{eval_explainer.dataset.name}_{arguments.explainer}'
-            f'_{eval_explainer.sampling_strategy}.csv')
+            f'_{eval_explainer.selection_strategy}.csv')
 
 
 if __name__ == '__main__':
@@ -132,7 +132,7 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--results', required=True, type=str,
                         help='Filepath for the evaluation results')
     parser.add_argument('--explainer', required=True, type=str, help='Which explainer to evaluate',
-                        choices=['greedy', 'searching', 'cftgnnexplainer'])
+                        choices=['greedy', 'searching', 'cody'])
     parser.add_argument('--sampler', required=True, default='recent', type=str,
                         choices=['random', 'recent', 'closest', 'pretrained', '1-best', 'all'])
     parser.add_argument('--sampler_model_path', default=None, type=str,
@@ -181,14 +181,14 @@ if __name__ == '__main__':
         case 'greedy':
             if args.sampler == 'all':
                 for sampler in SAMPLERS:
-                    explainers.append(EvaluationGreedyCFExplainer(tgn_wrapper, sampling_strategy=sampler,
+                    explainers.append(EvaluationGreedyCFExplainer(tgn_wrapper, selection_strategy=sampler,
                                                                   candidates_size=args.candidates_size,
                                                                   sample_size=args.sample_size,
                                                                   pretrained_sampler_parameters=sampler_params,
                                                                   verbose=args.debug,
                                                                   approximate_predictions=not args.no_approximation))
             else:
-                explainers.append(EvaluationGreedyCFExplainer(tgn_wrapper, sampling_strategy=args.sampler,
+                explainers.append(EvaluationGreedyCFExplainer(tgn_wrapper, selection_strategy=args.sampler,
                                                               candidates_size=args.candidates_size,
                                                               sample_size=args.sample_size,
                                                               pretrained_sampler_parameters=sampler_params,
@@ -198,32 +198,32 @@ if __name__ == '__main__':
             if args.sampler == 'all':
                 for sampler in SAMPLERS:
                     explainers.append(
-                        EvaluationSearchingCFExplainer(tgn_wrapper, sampling_strategy=sampler,
+                        EvaluationSearchingCFExplainer(tgn_wrapper, selection_strategy=sampler,
                                                        candidates_size=args.candidates_size,
                                                        sample_size=args.sample_size, verbose=args.debug,
                                                        pretrained_sampler_parameters=sampler_params,
                                                        approximate_predictions=not args.no_approximation))
             else:
-                explainers.append(EvaluationSearchingCFExplainer(tgn_wrapper, sampling_strategy=args.sampler,
+                explainers.append(EvaluationSearchingCFExplainer(tgn_wrapper, selection_strategy=args.sampler,
                                                                  max_steps=args.max_steps,
                                                                  candidates_size=args.candidates_size,
                                                                  sample_size=args.sample_size, verbose=args.debug,
                                                                  pretrained_sampler_parameters=sampler_params,
                                                                  approximate_predictions=not args.no_approximation))
-        case 'cftgnnexplainer':
+        case 'cody':
             if args.sampler == 'all':
                 for sampler in SAMPLERS:
-                    explainers.append(EvaluationCFTGNNExplainer(tgn_wrapper, sampling_strategy=sampler,
-                                                                candidates_size=args.candidates_size,
-                                                                max_steps=args.max_steps, verbose=args.debug,
-                                                                pretrained_sampler_parameters=sampler_params,
-                                                                approximate_predictions=not args.no_approximation))
+                    explainers.append(EvaluationCoDy(tgn_wrapper, selection_strategy=sampler,
+                                                     candidates_size=args.candidates_size,
+                                                     max_steps=args.max_steps, verbose=args.debug,
+                                                     pretrained_sampler_parameters=sampler_params,
+                                                     approximate_predictions=not args.no_approximation))
             else:
-                explainers.append(EvaluationCFTGNNExplainer(tgn_wrapper, sampling_strategy=args.sampler,
-                                                            candidates_size=args.candidates_size,
-                                                            max_steps=args.max_steps, verbose=args.debug,
-                                                            pretrained_sampler_parameters=sampler_params,
-                                                            approximate_predictions=not args.no_approximation))
+                explainers.append(EvaluationCoDy(tgn_wrapper, selection_strategy=args.sampler,
+                                                 candidates_size=args.candidates_size,
+                                                 max_steps=args.max_steps, verbose=args.debug,
+                                                 pretrained_sampler_parameters=sampler_params,
+                                                 approximate_predictions=not args.no_approximation))
         case _:
             raise NotImplementedError
 

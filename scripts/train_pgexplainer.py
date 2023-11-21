@@ -5,10 +5,10 @@ import torch
 from TTGN.utils.utils import get_neighbor_finder
 from common import add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args, parse_args
 
-from CFTGNNExplainer.embedding import StaticEmbedding
-from CFTGNNExplainer.implementations.ttgn import TTGNWrapper
-from CFTGNNExplainer.implementations.tgn import to_data_object
-from CFTGNNExplainer.explainer.baseline.pgexplainer import TPGExplainer
+from cody.embedding import StaticEmbedding
+from cody.implementations.ttgn import TTGNWrapper
+from cody.implementations.tgn import to_data_object
+from cody.explainer.baseline.pgexplainer import TPGExplainer
 from TTGN.model.tgn import TGN
 
 if __name__ == '__main__':

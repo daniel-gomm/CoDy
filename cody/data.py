@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from CFTGNNExplainer.constants import COL_NODE_I, COL_NODE_U, COL_TIMESTAMP, COL_ID, COL_STATE, COL_SUBGRAPH_DISTANCE
+from cody.constants import COL_NODE_I, COL_NODE_U, COL_TIMESTAMP, COL_ID, COL_STATE, COL_SUBGRAPH_DISTANCE
 from dataclasses import dataclass
 
 

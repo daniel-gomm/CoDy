@@ -4,7 +4,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
 source "$SCRIPT_DIR/common.bash"
 
-EXPLAINER_TYPES=("pg_explainer" "tgnnexplainer" "greedy" "cftgnnexplainer")
+EXPLAINER_TYPES=("pg_explainer" "tgnnexplainer" "greedy" "cody")
 
 function evaluate() {
     for explainer in "${EXPLAINER_TYPES[@]}"; do

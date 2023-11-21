@@ -3,8 +3,8 @@ import logging
 import numpy as np
 import torch
 
-from CFTGNNExplainer.data import BatchData, ContinuousTimeDynamicGraphDataset
-from CFTGNNExplainer.utils import ProgressBar
+from cody.data import BatchData, ContinuousTimeDynamicGraphDataset
+from cody.utils import ProgressBar
 
 
 class TGNNWrapper:

@@ -5,10 +5,10 @@ from typing import List
 
 import numpy as np
 
-from CFTGNNExplainer.connector import TGNNWrapper
-from CFTGNNExplainer.explainer.base import Explainer, calculate_prediction_delta, TreeNode
-from CFTGNNExplainer.sampler import EdgeSampler, PretrainedEdgeSamplerParameters
-from CFTGNNExplainer.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
+from cody.connector import TGNNWrapper
+from cody.explainer.base import Explainer, calculate_prediction_delta, TreeNode
+from cody.sampler import EdgeSampler, PretrainedEdgeSamplerParameters
+from cody.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 
 
 def select_best_cf_example(current_best_example: BatchSearchTreeNode | None,
@@ -132,10 +132,10 @@ class BatchSearchTreeNode(TreeNode):
 class SearchingCFExplainer(Explainer):
 
     def __init__(self, tgnn_wrapper: TGNNWrapper, candidates_size: int = 75, sample_size: int = 10,
-                 sampling_strategy: str = 'recent', max_steps: int = 50, verbose: bool = False,
+                 selection_strategy: str = 'recent', max_steps: int = 50, verbose: bool = False,
                  approximate_predictions: bool = True,
                  pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
-        super().__init__(tgnn_wrapper, sampling_strategy, candidates_size=candidates_size, sample_size=sample_size,
+        super().__init__(tgnn_wrapper, selection_strategy, candidates_size=candidates_size, sample_size=sample_size,
                          verbose=verbose, approximate_predictions=approximate_predictions,
                          pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.max_steps = max_steps

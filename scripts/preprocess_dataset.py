@@ -2,7 +2,7 @@ import argparse
 import sys
 import pandas as pd
 import numpy as np
-from CFTGNNExplainer.constants import COL_ID, COL_STATE, COL_NODE_I, COL_NODE_U, COL_TIMESTAMP
+from cody.constants import COL_ID, COL_STATE, COL_NODE_I, COL_NODE_U, COL_TIMESTAMP
 
 
 def _check_required_columns(dataset: pd.DataFrame) -> None:
