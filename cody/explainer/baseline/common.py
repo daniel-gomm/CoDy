@@ -11,12 +11,12 @@ def k_hop_temporal_subgraph(df, num_hops, event_idx):
 
     """
     df_new = df.copy()
-    df_new = df_new[df_new[COL_ID] <= event_idx]  # ignore events latter than event_idx
+    df_new = df_new[df_new[COL_ID] <= event_idx]  # ignore events later than event_idx
 
     center_node = df_new[df_new[COL_ID] == event_idx][COL_NODE_U].values[0]  # event_idx represents e_idx
 
     subsets = [[center_node], ]
-    num_nodes = df_new[COL_NODE_I].max() + 1
+    num_nodes = np.max((df_new[COL_NODE_I].max(), df_new[COL_NODE_U].max())) + 1
 
     node_mask = np.zeros((num_nodes,), dtype=bool)
     source_nodes = np.array(df_new[COL_NODE_U], dtype=int)  # user nodes, 0--k-1
