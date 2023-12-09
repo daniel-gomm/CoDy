@@ -233,7 +233,10 @@ if __name__ == '__main__':
         logger.info(f'Resuming evaluation. '
                     f'Already processed {len(encountered_event_ids)}/{len(event_ids_to_explain)} events.')
         event_ids_to_explain = event_ids_to_explain[~np.isin(event_ids_to_explain, encountered_event_ids)]
-
-    evaluate(explainers, event_ids_to_explain, args.optimize, args.max_time * 60)
+    try:
+        evaluate(explainers, event_ids_to_explain, args.optimize, args.max_time * 60)
+    except KeyboardInterrupt:
+        logger.info('Evaluation interrupted. Saving current results...')
     for explainer in explainers:
-        export_explanations(explainer.explanation_results_list, construct_results_save_path(args, explainer))
+        if len(explainer.explanation_results_list) > 0:
+            export_explanations(explainer.explanation_results_list, construct_results_save_path(args, explainer))
