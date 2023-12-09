@@ -100,6 +100,7 @@ class MCTSNode(object):
 def compute_scores(tgnn: TTGNWrapper, base_events, children, target_event_idx):
     results = []
     oracle_call_time = 0
+    oracle_calls = 0
     original_prediction = tgnn.original_score
     for child in children:
         if child.P == 0:
@@ -109,6 +110,7 @@ def compute_scores(tgnn: TTGNWrapper, base_events, children, target_event_idx):
                                                       edge_id_preserve_list=base_events + child.coalition)
             subgraph_prediction = subgraph_prediction.detach().cpu().item()
             oracle_call_time += time.time_ns() - before_oracle_call
+            oracle_calls += 1
             if original_prediction >= 0:
                 reward = subgraph_prediction - original_prediction
             else:
@@ -116,7 +118,7 @@ def compute_scores(tgnn: TTGNWrapper, base_events, children, target_event_idx):
         else:
             reward = child.P
         results.append(reward)
-    return results, oracle_call_time
+    return results, oracle_call_time, oracle_calls
 
 
 class MCTS(object):
@@ -218,10 +220,11 @@ class MCTS(object):
                     continue
 
             # compute scores of all children
-            scores, compute_oracle_call_time = compute_scores(self.tgnn, self.base_events, tree_node.children,
-                                                              self.event_idx)
+            scores, compute_oracle_call_time, compute_oracle_calls = compute_scores(self.tgnn, self.base_events,
+                                                                                    tree_node.children,
+                                                                                    self.event_idx)
             self.oracle_call_time += compute_oracle_call_time
-            self.oracle_calls += 1
+            self.oracle_calls += compute_oracle_calls
             for child, score in zip(tree_node.children, scores):
                 child.P = score
 
