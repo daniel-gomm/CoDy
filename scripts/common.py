@@ -14,7 +14,7 @@ from cody.data import ContinuousTimeDynamicGraphDataset, TrainTestDatasetParamet
 from TGN.model.tgn import TGN
 from TGN.utils.utils import get_neighbor_finder
 
-SAMPLERS = ['random', 'recent', 'closest', '1-best']
+SAMPLERS = ['random', 'temporal', 'spatio-temporal', '1-best']
 
 
 def parse_args(parser: ArgumentParser) -> Namespace:

@@ -7,7 +7,7 @@ import numpy as np
 
 from cody.connector import TGNNWrapper
 from cody.explainer.base import Explainer, calculate_prediction_delta, TreeNode
-from cody.sampler import EdgeSampler, PretrainedEdgeSamplerParameters
+from cody.selection import SelectionStrategy, PretrainedSelectionStrategyParameters
 from cody.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 
 
@@ -134,13 +134,13 @@ class SearchingCFExplainer(Explainer):
     def __init__(self, tgnn_wrapper: TGNNWrapper, candidates_size: int = 75, sample_size: int = 10,
                  selection_strategy: str = 'recent', max_steps: int = 50, verbose: bool = False,
                  approximate_predictions: bool = True,
-                 pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
+                 pretrained_sampler_parameters: PretrainedSelectionStrategyParameters | None = None):
         super().__init__(tgnn_wrapper, selection_strategy, candidates_size=candidates_size, sample_size=sample_size,
                          verbose=verbose, approximate_predictions=approximate_predictions,
                          pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.max_steps = max_steps
 
-    def expand_node(self, explained_edge_id: int, node_to_expand: BatchSearchTreeNode, sampler: EdgeSampler,
+    def expand_node(self, explained_edge_id: int, node_to_expand: BatchSearchTreeNode, sampler: SelectionStrategy,
                     known_cf_examples: List[np.ndarray] | None = None) -> List[BatchSearchTreeNode]:
         counterfactual_examples: List[BatchSearchTreeNode] = []
         original_prediction = node_to_expand.original_prediction

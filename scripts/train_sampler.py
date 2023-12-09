@@ -11,7 +11,7 @@ from typing import List, Dict
 
 from sklearn.metrics import ndcg_score
 
-from cody.sampler import create_embedding_model
+from cody.selection import create_embedding_model
 from common import (create_dataset_from_args, create_tgn_wrapper_from_args, add_dataset_arguments,
                     add_wrapper_model_arguments, parse_args)
 
