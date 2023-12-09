@@ -3,7 +3,7 @@ import sys
 import numpy as np
 from cody.constants import COL_ID, EXPLAINED_EVENT_MEMORY_LABEL, CUR_IT_MIN_EVENT_MEM_LBL
 from cody.explainer.base import Explainer, CounterFactualExample, calculate_prediction_delta, TreeNode
-from cody.sampler import OneBestEdgeSampler
+from cody.selection import OneDeltaSelectionStrategy
 
 
 class GreedyTreeNode(TreeNode):
@@ -47,7 +47,7 @@ class GreedyCFExplainer(Explainer):
         best_cf_example = None
         best_non_cf_example = root_node
 
-        if type(sampler) is OneBestEdgeSampler:
+        if type(sampler) is OneDeltaSelectionStrategy:
             for child_id in sampler.rank_subgraph(base_event_id=explained_event_id, excluded_events=np.array([])):
                 prediction = self.calculate_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID].to_numpy(),
                                                                 cf_example_events=[],

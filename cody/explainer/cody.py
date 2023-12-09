@@ -8,7 +8,7 @@ import numpy as np
 from cody.connector import TGNNWrapper
 from cody.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from cody.explainer.base import Explainer, CounterFactualExample, calculate_prediction_delta, TreeNode
-from cody.sampler import PretrainedEdgeSamplerParameters, EdgeSampler, OneBestEdgeSampler
+from cody.selection import PretrainedSelectionStrategyParameters, SelectionStrategy, OneDeltaSelectionStrategy
 
 
 def find_best_non_counterfactual_example(root_node: CoDyTreeNode) -> CoDyTreeNode:
@@ -123,7 +123,7 @@ class CoDy(Explainer):
 
     def __init__(self, tgnn_wrapper: TGNNWrapper, candidates_size: int = 75, selection_strategy: str = 'recent',
                  max_steps: int = 200, verbose: bool = False, approximate_predictions: bool = True,
-                 pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None, alpha: float = 2.0,
+                 pretrained_sampler_parameters: PretrainedSelectionStrategyParameters | None = None, alpha: float = 2.0,
                  beta: float = 1.0):
         super().__init__(tgnn_wrapper, selection_strategy, candidates_size=candidates_size, sample_size=candidates_size,
                          verbose=verbose, approximate_predictions=approximate_predictions,
@@ -133,7 +133,7 @@ class CoDy(Explainer):
         self.alpha = alpha
         self.beta = beta
 
-    def _run_node_expansion(self, explained_edge_id: int, node_to_expand: CoDyTreeNode, sampler: EdgeSampler):
+    def _run_node_expansion(self, explained_edge_id: int, node_to_expand: CoDyTreeNode, sampler: SelectionStrategy):
         edge_ids_to_exclude = node_to_expand.get_parent_ids()
         prediction = self.calculate_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID].to_numpy(),
                                                         cf_example_events=edge_ids_to_exclude,
@@ -145,7 +145,7 @@ class CoDy(Explainer):
         self._expand_node(explained_edge_id, node_to_expand, prediction, sampler)
 
     def _expand_node(self, explained_edge_id: int, node_to_expand: CoDyTreeNode, prediction: float,
-                     sampler: EdgeSampler):
+                     sampler: SelectionStrategy):
         self.known_states[node_to_expand.hash()] = prediction
 
         if node_to_expand.is_counterfactual:
@@ -180,7 +180,7 @@ class CoDy(Explainer):
                                  original_prediction=original_prediction, alpha=self.alpha, beta=self.beta)
         self._expand_node(explained_event_id, root_node, original_prediction, sampler)
 
-        if type(sampler) is OneBestEdgeSampler:
+        if type(sampler) is OneDeltaSelectionStrategy:
             for child in root_node.children:
                 # Expand all children
                 self._run_node_expansion(explained_event_id, child, sampler)

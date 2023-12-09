@@ -38,7 +38,7 @@ def filter_subgraph(base_event_id: int, excluded_events: np.ndarray, subgraph: p
     return filtered_subgraph[~filtered_subgraph[COL_ID].isin(further_events_to_exclude)]
 
 
-class EdgeSampler:
+class SelectionStrategy:
 
     def __init__(self, subgraph: pd.DataFrame):
         assert len(subgraph) > 0
@@ -56,7 +56,7 @@ class EdgeSampler:
         raise NotImplementedError
 
 
-class RandomEdgeSampler(EdgeSampler):
+class RandomSelectionStrategy(SelectionStrategy):
 
     def rank_subgraph(self, base_event_id: int, excluded_events: np.ndarray,
                       known_cf_examples: List[np.ndarray] | None = None):
@@ -64,7 +64,7 @@ class RandomEdgeSampler(EdgeSampler):
         return filtered_subgraph.sample(frac=1)[COL_ID].to_numpy()
 
 
-class RecentEdgeSampler(EdgeSampler):
+class TemporalSelectionStrategy(SelectionStrategy):
 
     def rank_subgraph(self, base_event_id: int, excluded_events: np.ndarray,
                       known_cf_examples: List[np.ndarray] | None = None):
@@ -72,26 +72,26 @@ class RecentEdgeSampler(EdgeSampler):
         return filtered_subgraph[COL_ID].to_numpy()[::-1]
 
 
-class ClosestEdgeSampler(EdgeSampler):
+class SpatioTemporalSelectionStrategy(SelectionStrategy):
 
     def rank_subgraph(self, base_event_id: int, excluded_events: np.ndarray,
                       known_cf_examples: List[np.ndarray] | None = None):
         filtered_subgraph = filter_subgraph(base_event_id, excluded_events, self.subgraph, known_cf_examples)
-        sorted_subgraph = filtered_subgraph.sort_values(by=[COL_TIMESTAMP, COL_SUBGRAPH_DISTANCE],
+        sorted_subgraph = filtered_subgraph.sort_values(by=[COL_SUBGRAPH_DISTANCE, COL_TIMESTAMP],
                                                         ascending=[True, False])
         return sorted_subgraph[COL_ID].to_numpy()
 
 
 @dataclass
-class PretrainedEdgeSamplerParameters:
+class PretrainedSelectionStrategyParameters:
     embedding_model: torch.nn.Module
     embedding: Embedding
     predict_for_each_sample: bool
 
 
-class PretrainedEdgeSampler(EdgeSampler):
+class PretrainedSelectionStrategy(SelectionStrategy):
 
-    def __init__(self, subgraph: pd.DataFrame, parameters: PretrainedEdgeSamplerParameters, explained_event_id: int,
+    def __init__(self, subgraph: pd.DataFrame, parameters: PretrainedSelectionStrategyParameters, explained_event_id: int,
                  original_prediction: float):
         super().__init__(subgraph)
         self.embedding_model = parameters.embedding_model
@@ -125,7 +125,7 @@ class PretrainedEdgeSampler(EdgeSampler):
         return sorted_subgraph[COL_ID].to_numpy()
 
 
-class OneBestEdgeSampler(EdgeSampler):
+class OneDeltaSelectionStrategy(SelectionStrategy):
 
     def __init__(self, subgraph: pd.DataFrame):
         super().__init__(subgraph)

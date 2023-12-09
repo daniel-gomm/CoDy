@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from cody.connector import TGNNWrapper
 from cody.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from cody.data import SubgraphGenerator
-from cody.sampler import EdgeSampler, RandomEdgeSampler, RecentEdgeSampler, ClosestEdgeSampler, \
-    PretrainedEdgeSampler, PretrainedEdgeSamplerParameters, OneBestEdgeSampler
+from cody.selection import SelectionStrategy, RandomSelectionStrategy, TemporalSelectionStrategy, SpatioTemporalSelectionStrategy, \
+    PretrainedSelectionStrategy, PretrainedSelectionStrategyParameters, OneDeltaSelectionStrategy
 
 
 @dataclass
@@ -165,7 +165,7 @@ class Explainer:
 
     def __init__(self, tgnn_wrapper: TGNNWrapper, selection_strategy: str = 'recent', candidates_size: int = 75,
                  sample_size: int = 10, verbose: bool = False, approximate_predictions: bool = True,
-                 pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
+                 pretrained_sampler_parameters: PretrainedSelectionStrategyParameters | None = None):
         self.tgnn = tgnn_wrapper
         self.dataset = self.tgnn.dataset
         self.subgraph_generator = SubgraphGenerator(self.dataset)
@@ -180,23 +180,23 @@ class Explainer:
         self.pretrained_sampler_parameters = pretrained_sampler_parameters
 
     def _create_sampler(self, subgraph: pd.DataFrame, explained_event_id: int,
-                        original_prediction: float) -> EdgeSampler:
+                        original_prediction: float) -> SelectionStrategy:
         """
         Create sampling according to
         @type subgraph: DataFrame The subgraph on which to create the sampling
         """
         if self.selection_strategy == 'random':
-            return RandomEdgeSampler(subgraph)
-        elif self.selection_strategy == 'recent':
-            return RecentEdgeSampler(subgraph)
-        elif self.selection_strategy == 'closest':
-            return ClosestEdgeSampler(subgraph)
+            return RandomSelectionStrategy(subgraph)
+        elif self.selection_strategy == 'temporal':
+            return TemporalSelectionStrategy(subgraph)
+        elif self.selection_strategy == 'spatio-temporal':
+            return SpatioTemporalSelectionStrategy(subgraph)
         elif self.selection_strategy == 'pretrained':
             assert self.pretrained_sampler_parameters is not None
-            return PretrainedEdgeSampler(subgraph, self.pretrained_sampler_parameters, explained_event_id,
-                                         original_prediction)
+            return PretrainedSelectionStrategy(subgraph, self.pretrained_sampler_parameters, explained_event_id,
+                                               original_prediction)
         elif self.selection_strategy == '1-best':
-            return OneBestEdgeSampler(subgraph)
+            return OneDeltaSelectionStrategy(subgraph)
         else:
             raise NotImplementedError(f'No sampling implemented for sampling strategy {self.selection_strategy}')
 
@@ -215,7 +215,7 @@ class Explainer:
             self.logger.info(f'Original prediction {original_prediction}')
         return original_prediction
 
-    def initialize_explanation(self, explained_event_id: int) -> (float, EdgeSampler):
+    def initialize_explanation(self, explained_event_id: int) -> (float, SelectionStrategy):
         """
         Initialize the explanation process
         @param explained_event_id: ID of the event that should be explained

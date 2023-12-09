@@ -9,7 +9,7 @@ from cody.connector import TGNNWrapper
 from cody.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from cody.explainer.base import Explainer, CounterFactualExample, TreeNode
 from cody.explainer.greedy import GreedyCFExplainer, GreedyTreeNode
-from cody.sampler import EdgeSampler, PretrainedEdgeSamplerParameters, OneBestEdgeSampler
+from cody.selection import SelectionStrategy, PretrainedSelectionStrategyParameters, OneDeltaSelectionStrategy
 from cody.explainer.searching import (BatchSearchTreeNode, select_best_cf_example,
                                       find_best_non_counterfactual_example, SearchingCFExplainer)
 from cody.explainer.cody import CoDy, CoDyTreeNode
@@ -50,12 +50,12 @@ class EvaluationExplainer(Explainer):
 
     def __init__(self, tgnn_wrapper: TGNNWrapper, selection_strategy: str = 'recent', candidates_size: int = 75,
                  sample_size: int = 10, verbose: bool = False, approximate_predictions: bool = True,
-                 pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
+                 pretrained_sampler_parameters: PretrainedSelectionStrategyParameters | None = None):
         super().__init__(tgnn_wrapper, selection_strategy, candidates_size, sample_size, verbose,
                          approximate_predictions, pretrained_sampler_parameters)
         self.explanation_results_list = []
 
-    def initialize_explanation_evaluation(self, explained_event_id: int, original_prediction: float) -> EdgeSampler:
+    def initialize_explanation_evaluation(self, explained_event_id: int, original_prediction: float) -> SelectionStrategy:
         subgraph = self.subgraph_generator.get_fixed_size_k_hop_temporal_subgraph(num_hops=self.num_hops,
                                                                                   base_event_id=explained_event_id,
                                                                                   size=self.candidates_size)
@@ -77,7 +77,7 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
 
     def __init__(self, tgnn_wrapper: TGNNWrapper, selection_strategy: str = 'recent', sample_size: int = 10,
                  candidates_size: int = 64, verbose: bool = False, approximate_predictions: bool = True,
-                 pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
+                 pretrained_sampler_parameters: PretrainedSelectionStrategyParameters | None = None):
         super(GreedyCFExplainer, self).__init__(tgnn_wrapper=tgnn_wrapper, selection_strategy=selection_strategy,
                                                 sample_size=sample_size, candidates_size=candidates_size,
                                                 verbose=verbose, approximate_predictions=approximate_predictions,
@@ -133,7 +133,7 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
         best_non_cf_example = root_node
         skip_search = False
 
-        if type(sampler) is OneBestEdgeSampler:
+        if type(sampler) is OneDeltaSelectionStrategy:
             for child_id in sampler.rank_subgraph(base_event_id=explained_event_id, excluded_events=np.array([])):
                 child_node, oc_duration, saved_time = self.create_child_node(node_to_expand=root_node,
                                                                              memory_label=EXPLAINED_EVENT_MEMORY_LABEL,
@@ -228,7 +228,7 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
     def __init__(self, tgnn_wrapper: TGNNWrapper, selection_strategy: str = 'recent', max_steps: int = 100,
                  sample_size: int = 10, candidates_size: int = 64, verbose: bool = False,
                  approximate_predictions: bool = True,
-                 pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
+                 pretrained_sampler_parameters: PretrainedSelectionStrategyParameters | None = None):
         SearchingCFExplainer.__init__(self, tgnn_wrapper=tgnn_wrapper, selection_strategy=selection_strategy,
                                       sample_size=sample_size, candidates_size=candidates_size, verbose=verbose,
                                       approximate_predictions=approximate_predictions,
@@ -239,7 +239,7 @@ class EvaluationSearchingCFExplainer(SearchingCFExplainer, EvaluationExplainer):
                                      pretrained_sampler_parameters=pretrained_sampler_parameters)
         self.last_min_id = 0
 
-    def expand_node(self, explained_edge_id: int, node_to_expand: BatchSearchTreeNode, sampler: EdgeSampler,
+    def expand_node(self, explained_edge_id: int, node_to_expand: BatchSearchTreeNode, sampler: SelectionStrategy,
                     known_cf_examples: List[np.ndarray] | None = None) -> (List[BatchSearchTreeNode], int, int):
         oracle_calls = 0
         oracle_call_time = 0
@@ -351,7 +351,7 @@ class EvaluationCoDy(CoDy, EvaluationExplainer):
 
     def __init__(self, tgnn_wrapper: TGNNWrapper, selection_strategy: str = 'recent', max_steps: int = 300,
                  candidates_size: int = 64, verbose: bool = False, approximate_predictions: bool = True,
-                 pretrained_sampler_parameters: PretrainedEdgeSamplerParameters | None = None):
+                 pretrained_sampler_parameters: PretrainedSelectionStrategyParameters | None = None):
         CoDy.__init__(self, tgnn_wrapper=tgnn_wrapper, selection_strategy=selection_strategy,
                       candidates_size=candidates_size, verbose=verbose, max_steps=max_steps,
                       approximate_predictions=approximate_predictions,
@@ -381,7 +381,7 @@ class EvaluationCoDy(CoDy, EvaluationExplainer):
             EVALUATION_STATE_CACHE[full_hash] = PredictionResult(oracle_call_time, prediction)
             return prediction, oracle_call_time, 0
 
-    def _run_node_expansion(self, explained_edge_id: int, node_to_expand: CoDyTreeNode, sampler: EdgeSampler):
+    def _run_node_expansion(self, explained_edge_id: int, node_to_expand: CoDyTreeNode, sampler: SelectionStrategy):
         prediction, oracle_call_time, cache_save_time = (
             self._get_evaluation_subgraph_prediction(candidate_events=sampler.subgraph[COL_ID].to_numpy(),
                                                      node_to_expand=node_to_expand,
@@ -414,7 +414,7 @@ class EvaluationCoDy(CoDy, EvaluationExplainer):
                                  original_prediction=original_prediction, alpha=self.alpha, beta=self.beta)
         self._expand_node(explained_event_id, root_node, original_prediction, sampler)
 
-        if type(sampler) is OneBestEdgeSampler:
+        if type(sampler) is OneDeltaSelectionStrategy:
             for child in root_node.children:
                 # Expand all children
                 exp_oracle_call_time, exp_cache_save_time = self._run_node_expansion(explained_event_id, child, sampler)
@@ -422,6 +422,7 @@ class EvaluationCoDy(CoDy, EvaluationExplainer):
                 cache_saved_oracle_call_time += exp_cache_save_time
                 oracle_calls += 1
                 if child.is_counterfactual:
+                    first_example_step = 0
                     if best_cf_example is None:
                         best_cf_example = child
                     elif best_cf_example.exploitation_score < child.exploitation_score:

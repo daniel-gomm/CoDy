@@ -10,7 +10,7 @@ import pandas as pd
 from cody.constants import COL_ID, EXPLAINED_EVENT_MEMORY_LABEL
 from cody.data import TrainTestDatasetParameters
 from cody.embedding import DynamicEmbedding, StaticEmbedding
-from cody.sampler import create_embedding_model, PretrainedEdgeSamplerParameters
+from cody.selection import create_embedding_model, PretrainedSelectionStrategyParameters
 from common import (add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args,
                     create_tgn_wrapper_from_args, parse_args, get_event_ids_from_file, SAMPLERS, column_to_int_array,
                     column_to_float_array)
@@ -134,7 +134,7 @@ if __name__ == '__main__':
     parser.add_argument('--explainer', required=True, type=str, help='Which explainer to evaluate',
                         choices=['greedy', 'searching', 'cody'])
     parser.add_argument('--sampler', required=True, default='recent', type=str,
-                        choices=['random', 'recent', 'closest', 'pretrained', '1-best', 'all'])
+                        choices=['random', 'temporal', 'spatio-temporal', 'pretrained', '1-best', 'all'])
     parser.add_argument('--sampler_model_path', default=None, type=str,
                         help='Path to the pretrained sampler model')
     parser.add_argument('--dynamic', action='store_true',
@@ -174,8 +174,8 @@ if __name__ == '__main__':
             embedding = StaticEmbedding(dataset, tgn_wrapper)
 
         pretrained_sampler_model = create_embedding_model(embedding, args.sampler_model_path, tgn_wrapper.device)
-        sampler_params = PretrainedEdgeSamplerParameters(pretrained_sampler_model, embedding,
-                                                         predict_for_each_sample=args.predict_for_each_sample)
+        sampler_params = PretrainedSelectionStrategyParameters(pretrained_sampler_model, embedding,
+                                                               predict_for_each_sample=args.predict_for_each_sample)
     explainers = []
     match args.explainer:
         case 'greedy':
