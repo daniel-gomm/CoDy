@@ -17,7 +17,7 @@ FACTUAL_EXPLAINER_TYPES=("pg_explainer" "tgnnexplainer")
 COUNTERFACTUAL_EXPLAINER_TYPES=("greedy" "searching" "cody")
 EXPLAINER_TYPES=("${FACTUAL_EXPLAINER_TYPES[@]}" "${COUNTERFACTUAL_EXPLAINER_TYPES[@]}")
 
-SAMPLER_TYPES=("random" "temporal" "spatio-temporal" "pretrained" "1-best")
+SAMPLER_TYPES=("random" "temporal" "spatio-temporal" "pretrained" "local-gradient")
 ALL_SAMPLER_TYPES=("${SAMPLER_TYPES[@]}" "all")
 
 

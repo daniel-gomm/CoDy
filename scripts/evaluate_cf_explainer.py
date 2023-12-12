@@ -134,7 +134,7 @@ if __name__ == '__main__':
     parser.add_argument('--explainer', required=True, type=str, help='Which explainer to evaluate',
                         choices=['greedy', 'searching', 'cody'])
     parser.add_argument('--sampler', required=True, default='recent', type=str,
-                        choices=['random', 'temporal', 'spatio-temporal', 'pretrained', '1-best', 'all'])
+                        choices=['random', 'temporal', 'spatio-temporal', 'pretrained', 'local-gradient', 'all'])
     parser.add_argument('--sampler_model_path', default=None, type=str,
                         help='Path to the pretrained sampler model')
     parser.add_argument('--dynamic', action='store_true',

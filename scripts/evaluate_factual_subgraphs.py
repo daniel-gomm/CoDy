@@ -1,5 +1,4 @@
 import argparse
-import json
 import os.path
 
 import numpy as np
@@ -42,8 +41,9 @@ if __name__ == '__main__':
     progress_bar = ProgressBar(len(results_df), 'Adding counterfacual information')
     for index, row in results_df.iterrows():
         progress_bar.next()
-        res_str = row['results'].replace("\'", '\"')
-        results = json.loads(res_str)
+        # res_str = row['results'].replace("\'", '\"')
+        # results = json.loads(res_str)
+        results = row['results'].tolist()
 
         best_prediction = results[0]['prediction']
         best_result = results[0]
