@@ -125,7 +125,7 @@ class PretrainedSelectionStrategy(SelectionStrategy):
         return sorted_subgraph[COL_ID].to_numpy()
 
 
-class OneDeltaSelectionStrategy(SelectionStrategy):
+class LocalGradientSelectionStrategy(SelectionStrategy):
 
     def __init__(self, subgraph: pd.DataFrame):
         super().__init__(subgraph)

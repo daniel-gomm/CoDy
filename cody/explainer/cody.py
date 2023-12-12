@@ -8,7 +8,7 @@ import numpy as np
 from cody.connector import TGNNWrapper
 from cody.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from cody.explainer.base import Explainer, CounterFactualExample, calculate_prediction_delta, TreeNode
-from cody.selection import PretrainedSelectionStrategyParameters, SelectionStrategy, OneDeltaSelectionStrategy
+from cody.selection import PretrainedSelectionStrategyParameters, SelectionStrategy, LocalGradientSelectionStrategy
 
 
 def find_best_non_counterfactual_example(root_node: CoDyTreeNode) -> CoDyTreeNode:
@@ -180,7 +180,7 @@ class CoDy(Explainer):
                                  original_prediction=original_prediction, alpha=self.alpha, beta=self.beta)
         self._expand_node(explained_event_id, root_node, original_prediction, sampler)
 
-        if type(sampler) is OneDeltaSelectionStrategy:
+        if type(sampler) is LocalGradientSelectionStrategy:
             for child in root_node.children:
                 # Expand all children
                 self._run_node_expansion(explained_event_id, child, sampler)

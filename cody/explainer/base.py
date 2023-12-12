@@ -11,7 +11,7 @@ from cody.connector import TGNNWrapper
 from cody.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from cody.data import SubgraphGenerator
 from cody.selection import SelectionStrategy, RandomSelectionStrategy, TemporalSelectionStrategy, SpatioTemporalSelectionStrategy, \
-    PretrainedSelectionStrategy, PretrainedSelectionStrategyParameters, OneDeltaSelectionStrategy
+    PretrainedSelectionStrategy, PretrainedSelectionStrategyParameters, LocalGradientSelectionStrategy
 
 
 @dataclass
@@ -195,8 +195,8 @@ class Explainer:
             assert self.pretrained_sampler_parameters is not None
             return PretrainedSelectionStrategy(subgraph, self.pretrained_sampler_parameters, explained_event_id,
                                                original_prediction)
-        elif self.selection_strategy == '1-best':
-            return OneDeltaSelectionStrategy(subgraph)
+        elif self.selection_strategy == 'local-gradient':
+            return LocalGradientSelectionStrategy(subgraph)
         else:
             raise NotImplementedError(f'No sampling implemented for sampling strategy {self.selection_strategy}')
 

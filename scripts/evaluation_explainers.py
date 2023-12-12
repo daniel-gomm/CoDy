@@ -9,7 +9,7 @@ from cody.connector import TGNNWrapper
 from cody.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from cody.explainer.base import Explainer, CounterFactualExample, TreeNode
 from cody.explainer.greedy import GreedyCFExplainer, GreedyTreeNode
-from cody.selection import SelectionStrategy, PretrainedSelectionStrategyParameters, OneDeltaSelectionStrategy
+from cody.selection import SelectionStrategy, PretrainedSelectionStrategyParameters, LocalGradientSelectionStrategy
 from cody.explainer.searching import (BatchSearchTreeNode, select_best_cf_example,
                                       find_best_non_counterfactual_example, SearchingCFExplainer)
 from cody.explainer.cody import CoDy, CoDyTreeNode
@@ -133,7 +133,7 @@ class EvaluationGreedyCFExplainer(GreedyCFExplainer, EvaluationExplainer):
         best_non_cf_example = root_node
         skip_search = False
 
-        if type(sampler) is OneDeltaSelectionStrategy:
+        if type(sampler) is LocalGradientSelectionStrategy:
             for child_id in sampler.rank_subgraph(base_event_id=explained_event_id, excluded_events=np.array([])):
                 child_node, oc_duration, saved_time = self.create_child_node(node_to_expand=root_node,
                                                                              memory_label=EXPLAINED_EVENT_MEMORY_LABEL,
@@ -414,7 +414,7 @@ class EvaluationCoDy(CoDy, EvaluationExplainer):
                                  original_prediction=original_prediction, alpha=self.alpha, beta=self.beta)
         self._expand_node(explained_event_id, root_node, original_prediction, sampler)
 
-        if type(sampler) is OneDeltaSelectionStrategy:
+        if type(sampler) is LocalGradientSelectionStrategy:
             for child in root_node.children:
                 # Expand all children
                 exp_oracle_call_time, exp_cache_save_time = self._run_node_expansion(explained_event_id, child, sampler)
