@@ -5,7 +5,7 @@ from typing import List
 
 import numpy as np
 
-from cody.connector import TGNNWrapper
+from cody.implementations.connector import TGNNWrapper
 from cody.explainer.base import Explainer, calculate_prediction_delta, TreeNode
 from cody.selection import SelectionStrategy, PretrainedSelectionStrategyParameters
 from cody.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID

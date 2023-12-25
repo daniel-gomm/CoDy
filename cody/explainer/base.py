@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 
-from cody.connector import TGNNWrapper
+from cody.implementations.connector import TGNNWrapper
 from cody.constants import EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from cody.data import SubgraphGenerator
 from cody.selection import SelectionStrategy, RandomSelectionStrategy, TemporalSelectionStrategy, SpatioTemporalSelectionStrategy, \

@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from cody.connector import TGNNWrapper
+from cody.implementations.connector import TGNNWrapper
 from cody.constants import COL_TIMESTAMP, COL_NODE_I, COL_NODE_U
 from cody.data import BatchData, ContinuousTimeDynamicGraphDataset
 from cody.utils import ProgressBar, construct_model_path

@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from cody.connector import TGNNWrapper
+from cody.implementations.connector import TGNNWrapper
 from cody.data import ContinuousTimeDynamicGraphDataset
 
 
