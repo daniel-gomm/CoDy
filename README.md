@@ -15,6 +15,7 @@ Contents:
    5. [Postprocess the evaluation results](#45-postprocess-the-evaluation-results)
 5. [Development guide](#5-development-guide)
 
+
 ## 1. Install CoDy
 The first step towards installing the CoDy repository is to download the repository and its submodules. To do this run 
 the following command to clone and initialize the repository:
@@ -51,6 +52,8 @@ default, it contains two seperate implementations of the [TGN model](https://git
 This section details the Architecture of the CoDy package. It outlines how the explainers, the selection strategies, and 
 the implementations of TGNNs are integrated into a coherent framework.
 
+__Further description of the architecture is currently work in progress__
+
 ## 4. Run the evaluation
 
 ### 4.1. Prepare Datasets
@@ -65,7 +68,6 @@ Place the datasets as .csv files in the [/resources/datasets/raw](./resources/da
 To prepare the raw datasets for the usage run the following command from the [/scripts](./scripts) directory:
 
 Wikipedia/UCI-Forums:
-
 ```shell 
 bash preprocess_data.bash DATASET-NAME --bipartite
 ```
@@ -203,3 +205,6 @@ command for each of the explainers and each of the datasets to add the informati
 
 
 ## 5. Development Guide
+
+
+__The development guide is currently work in progress__
