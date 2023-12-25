@@ -5,7 +5,7 @@ from typing import Dict, List
 import numpy as np
 import time
 
-from cody.connector import TGNNWrapper
+from cody.implementations.connector import TGNNWrapper
 from cody.constants import CUR_IT_MIN_EVENT_MEM_LBL, EXPLAINED_EVENT_MEMORY_LABEL, COL_ID
 from cody.explainer.base import Explainer, CounterFactualExample, TreeNode
 from cody.explainer.greedy import GreedyCFExplainer, GreedyTreeNode

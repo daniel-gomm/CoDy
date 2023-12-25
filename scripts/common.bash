@@ -14,7 +14,7 @@ RESULTS_DIR="$PARENT_DIR/resources/results"
 DATASET_NAMES=($(find "$PROCESSED_DATA_DIR" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;))
 
 FACTUAL_EXPLAINER_TYPES=("pg_explainer" "tgnnexplainer")
-COUNTERFACTUAL_EXPLAINER_TYPES=("greedy" "searching" "cody")
+COUNTERFACTUAL_EXPLAINER_TYPES=("greedy" "cody")
 EXPLAINER_TYPES=("${FACTUAL_EXPLAINER_TYPES[@]}" "${COUNTERFACTUAL_EXPLAINER_TYPES[@]}")
 
 SAMPLER_TYPES=("random" "temporal" "spatio-temporal" "pretrained" "local-gradient")

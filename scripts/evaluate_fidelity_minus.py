@@ -5,7 +5,7 @@ from os import listdir
 import pandas as pd
 import numpy as np
 
-from cody.connector import TGNNWrapper
+from cody.implementations.connector import TGNNWrapper
 from cody.data import TrainTestDatasetParameters
 from cody.utils import ProgressBar
 from common import (add_dataset_arguments, add_wrapper_model_arguments, create_dataset_from_args,

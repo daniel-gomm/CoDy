@@ -6,7 +6,7 @@ import torch
 from cody.utils import ProgressBar
 from TTGN.model.tgn import TGN
 
-from cody.connector import TGNNWrapper
+from cody.implementations.connector import TGNNWrapper
 from cody.data import ContinuousTimeDynamicGraphDataset, BatchData
 from cody.constants import COL_ID
 from TTGN.utils.data_processing import compute_time_statistics
