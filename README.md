@@ -230,5 +230,25 @@ command for each of the explainers and each of the datasets to add the informati
 
 ## 5. Development Guide
 
+### 5.1. Adding a new target model
 
-__The development guide is currently work in progress__
+To add a new target model you need to implement a new wrapper that acts as a bridge between the functionalities of
+the explainers and the target model. To add a new wrapper create a new class that extends the 
+[TGNNWrapper](./cody/implementations/connector.py) class. Make sure to override all the necessary functions of this 
+class. As reference you can take a look at the implementation of the wrapper for the TGN model: 
+[TGNWrapper](./cody/implementations/tgn.py)
+
+Implementing a new explanation method like this will work with the explanation methods, however, to run the evaluation
+for this target model, the seperated evaluation scripts have to be developed.
+
+
+### 5.2. Add a new explanation method
+
+A new explanation method is implemented as a new class that extends the [Explainer](./cody/explainer/base.py) class. 
+Make sure to overrride the functions appropriately. It may be useful to use the [TreeNode](./cody/explainer/base.py)
+class as basis for a search tree.
+
+As inspiration you can have a look at the implementations of [CoDy](./cody/explainer/cody.py) or 
+[GreeDyCF](./cody/explainer/greedy.py).
+
+You can also add a new selection strategy by extending the [SelectionStrategy](./cody/selection.py) class.
