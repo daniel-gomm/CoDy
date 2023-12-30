@@ -1,4 +1,5 @@
 import pandas as pd
+import sys
 import argparse
 
 if __name__ == '__main__':
@@ -19,7 +20,7 @@ if __name__ == '__main__':
     raw_data['timestamp'] = pd.to_datetime(raw_data['timestamp'])
     raw_data['timestamp'] = (raw_data['timestamp'] - pd.Timestamp("1970-01-01")) // pd.Timedelta('1s')
     reordered_data = raw_data[['user_id', 'item_id', 'timestamp', 'state_label']]
-    reordered_data.to_csv(args.output)
+    reordered_data.to_csv(args.output, index=False)
 
     print(f'Reformatted file saved to {args.output}')
 
